@@ -3,3 +3,11 @@ greenlet==3.3.2
 PyMySQL==1.1.2
 SQLAlchemy==2.0.48
 typing_extensions==4.15.0
+fastapi==0.115.0
+uvicorn==0.30.6
+pydantic-settings==2.6.1
+chromadb==0.5.23
+sentence-transformers==3.1.1
+anthropic==0.39.0
+python-dotenv==1.0.1
+python-multipart==0.0.12
