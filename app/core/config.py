@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str
@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     # 임베딩 모델
     EMBEDDING_MODEL: str = "jhgan/ko-sroberta-multitask"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # SQL 로그 출력 여부 (운영 환경에서는 False)
+    SQL_ECHO: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
 settings = Settings()
