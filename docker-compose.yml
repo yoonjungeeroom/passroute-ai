@@ -1,5 +1,6 @@
 services:
   fastapi:
+    image: 896884286777.dkr.ecr.ap-northeast-2.amazonaws.com/passroute-ai-server:latest
     build: .
     ports:
       - "8000:8000"
