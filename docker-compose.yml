@@ -9,7 +9,6 @@ services:
       - redis
     volumes:
       - .:/app
-      - model-cache:/root/.cache/torch/sentence_transformers
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     healthcheck:
@@ -22,6 +21,3 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
-
-volumes:
-  model-cache:
