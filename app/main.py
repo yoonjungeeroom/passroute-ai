@@ -1,19 +1,19 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
-#import chromadb
-#from sentence_transformers import SentenceTransformer
+import chromadb
 from app.core.config import settings
+from app.services.embedder import OnnxEmbedder
 from app.routers import stt
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    #app.state.chroma = chromadb.HttpClient(
-    #    host=settings.CHROMADB_HOST,
-    #    port=settings.CHROMADB_PORT,
-    #)
-    #app.state.embedder = SentenceTransformer(settings.EMBEDDING_MODEL)
+    app.state.chroma = chromadb.HttpClient(
+        host=settings.CHROMADB_HOST,
+        port=settings.CHROMADB_PORT,
+    )
+    app.state.embedder = OnnxEmbedder()
     yield
     # shutdown
 
@@ -29,7 +29,3 @@ app.include_router(stt.router)
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-@app.get("/test")
-async def test_page():
-    return FileResponse("test.html")
