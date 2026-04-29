@@ -744,3 +744,4 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,windows,jetbrains,visualstudio
 
 docs/
+CLAUDE.md

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     CHROMADB_PORT: int = 8000
 
     # 임베딩 모델
-    EMBEDDING_MODEL: str = "jhgan/ko-sroberta-multitask"
+    EMBEDDING_MODEL: str = "snunlp/KR-SBERT-V40K-klueNLI-augSTS"
 
     # SQL 로그 출력 여부 (운영 환경에서는 False)
     SQL_ECHO: bool = False
