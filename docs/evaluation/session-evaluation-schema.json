@@ -1,0 +1,100 @@
+{
+  "_comment": "세션 단위 평가 결과 JSON 포맷. 세션 종료 시 1회 생성.",
+
+  "session_id": "uuid",
+  "user_id": "uuid",
+  "created_at": "2026-04-05T20:00:00",
+
+  "session_info": {
+    "job_title": "백엔드 개발자",
+    "company_name": "카카오",
+    "total_questions": 3,
+    "report_ids": ["uuid_A", "uuid_B", "uuid_C"]
+  },
+
+  "item_averages": {
+    "_comment": "Spring에서 계산. null이 아닌 질문만 평균. conciseness는 conciseness_final 기준.",
+    "relevance":     { "avg": 4.3, "evaluated_count": 3 },
+    "logic":         { "avg": 3.0, "evaluated_count": 3 },
+    "specificity":   { "avg": 4.0, "evaluated_count": 3 },
+    "conciseness":   { "avg": 2.8, "evaluated_count": 3 },
+    "clarity":       { "avg": 3.7, "evaluated_count": 3 },
+    "accuracy":      { "avg": 4.5, "evaluated_count": 2 },
+    "depth":         { "avg": 3.0, "evaluated_count": 2 },
+    "job_relevance": { "avg": 3.7, "evaluated_count": 3 },
+    "authenticity":  { "avg": 4.5, "evaluated_count": 1 },
+    "growth":        { "avg": 4.0, "evaluated_count": 1 }
+  },
+
+  "session_score": {
+    "_comment": "Spring에서 계산. 동적 weight 재정규화 적용.",
+    "valid_weights_sum": 1.0,
+    "raw": 3.82,
+    "percentage": 76,
+    "consistency_score": 0.85
+  },
+
+  "analysis": {
+    "_comment": "Spring에서 계산.",
+    "key_weakness": ["논리성", "간결성"],
+    "interview_readiness": {
+      "_comment": "실제 합격/불합격 판단이 아닌 시스템 내부 참고 지표.",
+      "decision": "READY",
+      "confidence": 0.76,
+      "reason": "기술 정확성과 구체성은 높으나 논리성과 간결성이 반복적으로 낮음"
+    }
+  },
+
+  "session_summary_input": {
+    "_comment": "FastAPI LLM 세션 요약 호출 시 입력으로 전달되는 구조 예시.",
+    "per_question_summaries": [
+      {
+        "question_index": 1,
+        "question_type": "technical",
+        "question": "RESTful API 설계 원칙에 대해 설명해주세요.",
+        "percentage": 65,
+        "summary": {
+          "strengths": "기술 개념은 대체로 정확하게 설명했습니다.",
+          "improvements": "답변이 나열식이라 논리적 흐름 보완이 필요합니다."
+        }
+      },
+      {
+        "question_index": 2,
+        "question_type": "personality",
+        "question": "협업 과정에서 갈등을 해결한 경험을 말해주세요.",
+        "percentage": 85,
+        "summary": {
+          "strengths": "상황과 행동이 구체적으로 드러났습니다.",
+          "improvements": "결과를 수치나 변화 중심으로 보완하면 더 좋습니다."
+        }
+      }
+    ],
+    "best_q": {
+      "question_index": 2,
+      "percentage": 85
+    },
+    "worst_q": {
+      "question_index": 1,
+      "percentage": 65
+    }
+  },
+
+  "session_summary": {
+    "_comment": "FastAPI LLM이 생성. 입력: per_question_summaries + item_averages + session_score + best_q/worst_q",
+    "overall": "전반적으로 기술 역량은 우수하나 답변 구조화 능력에서 일관된 약점이 드러났습니다.",
+    "strengths": "기술 개념 정확성과 직무 연관성이 세션 전반에서 안정적으로 높았습니다.",
+    "improvements": "논리적 흐름 구성과 간결한 표현 훈련이 필요합니다.",
+    "question_highlights": [
+      {
+        "question_index": 2,
+        "type": "best",
+        "comment": "STAR 구조가 비교적 잘 갖춰졌으며 구체성도 높은 최고 답변입니다."
+      },
+      {
+        "question_index": 1,
+        "type": "worst",
+        "comment": "개념 정확성은 높으나 구조가 나열식에 그쳐 아쉬운 답변입니다."
+      }
+    ]
+  }
+}
