@@ -1,0 +1,67 @@
+{
+  "_comment": "질문 단위 평가 결과 JSON 포맷. LLM 평가(FastAPI) + rule-based(Spring) 결합 구조.",
+
+  "report_id": "uuid",
+  "session_id": "uuid",
+  "user_id": "uuid",
+  "created_at": "2026-04-05T20:00:00",
+
+  "interview_info": {
+    "job_title": "백엔드 개발자",
+    "company_name": "카카오",
+    "question_index": 1,
+    "question_type": "technical",
+    "jd_keywords": ["REST API", "Spring", "MySQL"],
+    "question": "RESTful API 설계 원칙에 대해 설명해주세요."
+  },
+
+  "llm_scores": {
+    "_comment": "FastAPI LLM이 채점. question_type에 따라 일부 항목 null. weight는 정책 테이블 기준으로 시스템에서 병합.",
+    "relevance":     { "score": 4, "weight": 0.15, "feedback": "질문 의도에 맞게 REST 원칙을 설명함" },
+    "logic":         { "score": 3, "weight": 0.15, "feedback": "답변 흐름이 일부 나열식이며 구조화가 부족함" },
+    "specificity":   { "score": 5, "weight": 0.15, "feedback": "HTTP 메서드, 상태코드 등 구체적 예시를 포함함" },
+    "conciseness":   { "score": 3, "weight": 0.10, "feedback": "핵심 전달은 되나 일부 군더더기 표현이 있음" },
+    "clarity":       { "score": 4, "weight": 0.10, "feedback": "비교적 명확하게 전달됨" },
+    "accuracy":      { "score": 5, "weight": 0.15, "feedback": "stateless, 캐시 가능성 등 핵심 개념 정확" },
+    "depth":         { "score": 3, "weight": 0.15, "feedback": "기본 개념 설명은 있으나 트레이드오프 언급은 부족함" },
+    "job_relevance": { "score": 4, "weight": 0.05, "feedback": "JD의 API 설계 경험 키워드와 연결됨" },
+    "authenticity":  null,
+    "growth":        null
+  },
+
+  "llm_analysis": {
+    "_comment": "FastAPI LLM이 판단. STAR는 LLM 기반이므로 rule_based와 분리.",
+    "star_evaluation": {
+      "applicable": false,
+      "reason": "기술 개념 설명형 질문이므로 STAR 평가 대상이 아님",
+      "star_breakdown": null,
+      "star_score": null
+    }
+  },
+
+  "rule_based": {
+    "_comment": "Spring에서 계산. 음성 분석 기반 감점 및 보정값.",
+    "voice_analysis": {
+      "filler_word_count": 5,
+      "speech_rate_diff": 10,
+      "silence_count": 2,
+      "conciseness_penalty": -0.5
+    },
+    "conciseness_final": 2.5
+  },
+
+  "total_score": {
+    "_comment": "Spring에서 계산. weight 재정규화 방식 적용. conciseness는 conciseness_final 값 사용.",
+    "valid_weights_sum": 1.0,
+    "conciseness_used": 2.5,
+    "raw": 3.85,
+    "percentage": 77
+  },
+
+  "summary": {
+    "_comment": "strengths, improvements는 FastAPI LLM이 생성. voice_feedback은 Spring에서 템플릿 기반으로 생성.",
+    "strengths": "기술 개념의 정확성과 구체적 예시 활용이 뛰어납니다.",
+    "improvements": "답변 구조를 다듬고 트레이드오프를 언급하면 깊이가 더해질 것 같습니다.",
+    "voice_feedback": "필러워드 5회 감지됨. 군더더기 표현을 줄이면 전달력이 향상될 것 같습니다."
+  }
+}
