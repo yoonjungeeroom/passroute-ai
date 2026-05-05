@@ -8,6 +8,8 @@ from app.schemas.follow_up import FollowUpRequest, FollowUpResponse
 
 logger = logging.getLogger(__name__)
 
+_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
 SYSTEM_PROMPT = """\
 당신은 개발자 채용 면접관입니다.
 지원자의 답변을 분석하여 꼬리 질문이 필요한지 판단하고, 필요하다면 꼬리 질문을 생성하세요.
@@ -77,13 +79,13 @@ async def generate_follow_up(
     스킵 판단과 턴 제한은 Spring 서버에서 사전 처리한다.
     """
     user_message = _build_user_message(request)
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     try:
-        response = await client.chat.completions.create(
+        response = await _client.chat.completions.create(
             model=settings.OPENAI_MODEL,
             max_tokens=512,
             temperature=0.7,
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
@@ -112,7 +114,7 @@ async def generate_follow_up(
             follow_up_question=parsed.get("follow_up_question"),
             reason=parsed.get("reason"),
         )
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, TypeError):
         logger.error("OpenAI 응답 파싱 실패: %s", raw_text)
         return FollowUpResponse(
             has_follow_up=False,
