@@ -9,10 +9,10 @@ SAMPLE_RATE = 16000
 FRAME_DURATION = 30
 
 client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+vad = webrtcvad.Vad(3)
 
 
 def detect_voice(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bool:
-    vad = webrtcvad.Vad(3)
     audio_bytes = audio.tobytes()
     num_samples = int(sample_rate * FRAME_DURATION / 1000)
     frames = [audio_bytes[i:i + num_samples * 2] for i in range(0, len(audio_bytes), num_samples * 2)]
