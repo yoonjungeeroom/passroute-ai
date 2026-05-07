@@ -13,3 +13,6 @@ chromadb==0.5.23
 anthropic==0.39.0
 python-dotenv==1.0.1
 python-multipart==0.0.12
+openai==2.32.0
+webrtcvad-wheels==2.0.14
+redis[asyncio]==5.2.1

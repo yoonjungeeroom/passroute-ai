@@ -3,18 +3,20 @@ from fastapi import FastAPI
 import chromadb
 from app.core.config import settings
 from app.services.embedder import OnnxEmbedder
+from app.core.redis_client import init_redis, close_redis
+from app.routers import stt
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
+    await init_redis()
     app.state.chroma = chromadb.HttpClient(
         host=settings.CHROMADB_HOST,
         port=settings.CHROMADB_PORT,
     )
     app.state.embedder = OnnxEmbedder()
     yield
-    # shutdown
+    await close_redis()
 
 
 app = FastAPI(
@@ -23,7 +25,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(stt.router)
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/test")
+async def test_page():
+    from fastapi.responses import FileResponse
+    return FileResponse("test.html")
