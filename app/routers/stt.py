@@ -2,6 +2,7 @@ import logging
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.stt_service import detect_voice, transcribe_audio
+from app.core.redis_client import append_stt_transcript
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,6 +26,7 @@ async def stt_websocket(websocket: WebSocket, session_id: str, question_id: str)
                         audio_buffer = np.concatenate(audio_chunks)
                         text = await transcribe_audio(audio_buffer)
                         if text:
+                            await append_stt_transcript(session_id, question_id, text)
                             await websocket.send_json({
                                 "status": "completed",
                                 "text": text,
@@ -43,6 +45,7 @@ async def stt_websocket(websocket: WebSocket, session_id: str, question_id: str)
             try:
                 text = await transcribe_audio(np.concatenate(audio_chunks))
                 if text:
+                    await append_stt_transcript(session_id, question_id, text)
                     logger.info(f"[{session_id}:{question_id}] 최종 STT: {text}")
             except Exception as e:
                 logger.error(f"최종 STT 에러: {e}")
