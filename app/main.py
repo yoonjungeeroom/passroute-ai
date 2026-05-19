@@ -6,6 +6,7 @@ from app.routers.follow_up import router as follow_up_router
 from app.services.embedder import OnnxEmbedder
 from app.core.redis_client import init_redis, close_redis
 from app.routers import stt
+from app.routers.ㄱesume import router as resume_router
 
 
 @asynccontextmanager
@@ -29,6 +30,8 @@ app = FastAPI(
 app.include_router(stt.router)
 
 app.include_router(follow_up_router)
+
+app.include_router(resume_router)
 
 
 @app.get("/health")

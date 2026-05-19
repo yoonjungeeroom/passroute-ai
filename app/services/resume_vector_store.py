@@ -43,7 +43,7 @@ def _get_collection():
     )
 
 
-def store_resume(user_id: str, raw_text: str, structured: dict) -> None:
+def store_resume(user_id: str, raw_text: str) -> None:  # structured 제거
     collection = _get_collection()
 
     existing = collection.get(where={"user_id": user_id})
@@ -58,17 +58,6 @@ def store_resume(user_id: str, raw_text: str, structured: dict) -> None:
         metadatas=[{"user_id": user_id, "type": "chunk"} for _ in chunks],
         ids=[f"{user_id}_chunk_{i}" for i in range(len(chunks))],
     )
-
-    if structured.get("summary"):
-        collection.add(
-            documents=[structured["summary"]],
-            metadatas=[{
-                "user_id": user_id,
-                "type": "summary",
-                "skills": ",".join(structured.get("skills", [])),
-            }],
-            ids=[f"{user_id}_summary"],
-        )
 
 
 def search_candidates(query: str, top_k: int = 5) -> list[dict]:
@@ -88,7 +77,6 @@ def search_candidates(query: str, top_k: int = 5) -> list[dict]:
             candidates.append({
                 "user_id": uid,
                 "score": round(1 - distance, 4),
-                "skills": meta.get("skills", "").split(","),
                 "matched_text": doc[:200],
             })
 
