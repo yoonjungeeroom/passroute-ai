@@ -6,7 +6,7 @@ from app.routers.follow_up import router as follow_up_router
 from app.services.embedder import OnnxEmbedder
 from app.core.redis_client import init_redis, close_redis
 from app.routers import stt
-from app.routers.ㄱesume import router as resume_router
+from app.routers.resume import router as resume_router
 
 
 @asynccontextmanager
