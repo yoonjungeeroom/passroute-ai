@@ -9,14 +9,15 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_REGION: str = "ap-northeast-2"
     AWS_S3_BUCKET_NAME: str = ""
-
+    
     # ChromaDB
     CHROMADB_HOST: str = "localhost"
     CHROMADB_PORT: int = 8000
 
     # 임베딩 모델
     EMBEDDING_MODEL: str = "snunlp/KR-SBERT-V40K-klueNLI-augSTS"
-
+    MODELS_DIR: str = "/app/models"
+    
     # SQL 로그 출력 여부 (운영 환경에서는 False)
     SQL_ECHO: bool = False
 

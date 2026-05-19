@@ -746,4 +746,7 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,windows,jetbrains,visualstudio
 
 docs/
-CLAUDE.md
+CLAUDE.mdmodels/
+test_resume.py
+가안이력서.pdf
+chroma_db/
