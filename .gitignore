@@ -754,3 +754,4 @@ chroma_db/
 chroma_data/
 test.html
 test_stt.py
+*.mp3
