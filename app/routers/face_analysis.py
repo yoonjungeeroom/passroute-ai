@@ -31,7 +31,7 @@ async def face_websocket(websocket: WebSocket, session_id: str, question_id: str
     ws_lock = asyncio.Lock()
     is_connected = True
 
-    face_landmarker = create_face_landmarker()
+    face_landmarker = await asyncio.to_thread(create_face_landmarker)
 
     gaze_window: deque = deque()
     blink_display: deque = deque()                    # 10초 표시용

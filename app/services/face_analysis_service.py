@@ -26,9 +26,16 @@ EAR_THRESHOLD = 0.25
 NOSE_TIP = 1  # nose tip landmark for head centering check
 
 
+_MODEL_BYTES = None
+
+
 def create_face_landmarker():
+    global _MODEL_BYTES
+    if _MODEL_BYTES is None:
+        with open(FACE_LANDMARKER_MODEL_PATH, "rb") as f:
+            _MODEL_BYTES = f.read()
     base_options = mp.tasks.python.BaseOptions(
-        model_asset_path=FACE_LANDMARKER_MODEL_PATH
+        model_asset_buffer=_MODEL_BYTES
     )
     options = mp.tasks.python.vision.FaceLandmarkerOptions(
         base_options=base_options,
