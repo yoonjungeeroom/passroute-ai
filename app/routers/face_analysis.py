@@ -5,12 +5,11 @@ import time
 from collections import deque
 
 import cv2
-import mediapipe as mp
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from sqlalchemy import select
-from app.services.face_analysis_service import analyze_frame
+from app.services.face_analysis_service import analyze_frame, create_face_landmarker
 from app.core.database import AsyncSessionLocal
 from app.models.face_analysis import FaceAnalysis
 
@@ -32,13 +31,7 @@ async def face_websocket(websocket: WebSocket, session_id: str, question_id: str
     ws_lock = asyncio.Lock()
     is_connected = True
 
-    face_mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+    face_landmarker = await asyncio.to_thread(create_face_landmarker)
 
     gaze_window: deque = deque()
     blink_display: deque = deque()                    # 10초 표시용
@@ -86,7 +79,7 @@ async def face_websocket(websocket: WebSocket, session_id: str, question_id: str
             except Exception:
                 continue
 
-            result = await asyncio.to_thread(analyze_frame, face_mesh, frame)
+            result = await asyncio.to_thread(analyze_frame, face_landmarker, frame)
             face_detected = result["face_detected"]
             gaze_on = result["gaze_on"]
             blink = result["blink"]
@@ -158,9 +151,9 @@ async def face_websocket(websocket: WebSocket, session_id: str, question_id: str
         logger.error(f"Face WebSocket 루프 에러: {e}")
     finally:
         try:
-            face_mesh.close()
+            face_landmarker.close()
         except Exception as e:
-            logger.error(f"face_mesh 닫기 실패: {e}")
+            logger.error(f"face_landmarker 닫기 실패: {e}")
 
         duration_sec = round(time.time() - start_time, 2)
         try:
