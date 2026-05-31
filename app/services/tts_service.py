@@ -12,11 +12,11 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_PERSONA_SPEAKERS: dict[str, str] = dict(
-    pair.split(":")
-    for pair in settings.DEBATE_TTS_PERSONA_SPEAKERS.split(",")
-    if ":" in pair
-)
+_PERSONA_SPEAKERS: dict[str, str] = {}
+for _pair in settings.DEBATE_TTS_PERSONA_SPEAKERS.split(","):
+    if ":" in _pair:
+        _k, _v = _pair.split(":", 1)
+        _PERSONA_SPEAKERS[_k.strip()] = _v.strip()
 
 
 class TtsService(ABC):
@@ -32,8 +32,14 @@ class NoopTtsService(TtsService):
 
 class GoogleTtsService(TtsService):
     def __init__(self) -> None:
+        if not settings.GOOGLE_TTS_CREDENTIALS_JSON:
+            raise ValueError("GOOGLE_TTS_CREDENTIALS_JSON이 비어 있습니다. TTS_ENABLED=true일 때는 서비스 계정 JSON이 필요합니다.")
+        try:
+            credentials_info = json.loads(settings.GOOGLE_TTS_CREDENTIALS_JSON)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"GOOGLE_TTS_CREDENTIALS_JSON 파싱 실패: {e}")
         credentials = service_account.Credentials.from_service_account_info(
-            json.loads(settings.GOOGLE_TTS_CREDENTIALS_JSON),
+            credentials_info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
         self._tts = texttospeech.TextToSpeechAsyncClient(credentials=credentials)
@@ -70,7 +76,7 @@ class GoogleTtsService(TtsService):
     async def _upload_s3(self, audio: bytes, file_key: str) -> str | None:
         bucket = settings.AWS_S3_BUCKET_NAME
         key = f"{settings.TTS_S3_PREFIX}/{file_key}.mp3"
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             await loop.run_in_executor(
                 None,
