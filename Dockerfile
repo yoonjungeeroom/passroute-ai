@@ -43,4 +43,8 @@ COPY . .
 # AWS RDS SSL 인증서 다운로드
 RUN curl -o /app/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
+# MediaPipe FaceLandmarker 모델 다운로드
+RUN curl -L -o /app/models/face_landmarker.task \
+    https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
