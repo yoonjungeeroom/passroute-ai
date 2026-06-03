@@ -2,7 +2,6 @@ import logging
 
 import cv2
 import mediapipe as mp
-import mediapipe.solutions.face_mesh as mp_face_mesh
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -26,15 +25,23 @@ RIGHT_EYE_OUTER = 362
 EAR_THRESHOLD = 0.25
 NOSE_TIP = 1  # nose tip landmark for head centering check
 
+_MODEL_BYTES = None
+
 
 def create_face_landmarker():
-    return mp_face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+    global _MODEL_BYTES
+    if _MODEL_BYTES is None:
+        with open(FACE_LANDMARKER_MODEL_PATH, "rb") as f:
+            _MODEL_BYTES = f.read()
+    from mediapipe.tasks.python.core.base_options import BaseOptions
+    from mediapipe.tasks.python.vision.face_landmarker import FaceLandmarker, FaceLandmarkerOptions, RunningMode
+    base_options = BaseOptions(model_asset_buffer=_MODEL_BYTES)
+    options = FaceLandmarkerOptions(
+        base_options=base_options,
+        running_mode=RunningMode.IMAGE,
+        num_faces=1,
     )
+    return FaceLandmarker.create_from_options(options)
 
 
 def _ear(landmarks, eye_indices, w: int, h: int) -> float:
