@@ -2,7 +2,7 @@ import logging
 
 import cv2
 import mediapipe as mp
-from mediapipe.python.solutions import face_mesh as mp_face_mesh
+import mediapipe.solutions.face_mesh as mp_face_mesh
 import numpy as np
 
 logger = logging.getLogger(__name__)
