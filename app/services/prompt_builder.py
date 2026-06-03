@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -6,11 +7,11 @@ from openai import APIError, APITimeoutError, AsyncOpenAI
 
 from app.core.config import settings
 from app.schemas.prompt_builder import (
-    CrawledData,
     GeneratedQuestion,
     QuestionGenerateRequest,
     QuestionGenerateResponse,
 )
+from app.services.resume_vector_store import query_crawled_data
 
 logger = logging.getLogger(__name__)
 
@@ -151,29 +152,20 @@ def _format_guideline(interview_format: str) -> str:
     )
 
 
-def _crawled_data_section(
-    interview_type: str,
-    interview_format: str,
-    crawled_data: Optional[CrawledData],
-) -> str:
-    if crawled_data is None:
-        return ""
+_SOURCE_MAP: dict[str, dict[str, list[str]]] = {
+    "DEBATE": {"sources": ["naver_news"], "label": "참고 뉴스 데이터"},
+    "TECHNICAL": {"sources": ["tech_blog", "jobkorea"], "label": "참고 업계 자료 (기술블로그/채용공고)"},
+    "PERSONALITY": {"sources": ["jobkorea"], "label": "참고 채용공고 데이터"},
+}
 
-    parts: list[str] = []
 
+def _resolve_crawled_sources(interview_type: str, interview_format: str) -> tuple[list[str], str]:
+    """면접 유형/형식에 따라 검색할 크롤링 소스와 라벨을 반환한다."""
     if interview_format == "DEBATE":
-        if crawled_data.news:
-            parts.append(f"[참고 뉴스 데이터]\n{crawled_data.news}")
-    elif interview_type == "TECHNICAL":
-        if crawled_data.tech_blog:
-            parts.append(f"[참고 기술 블로그 데이터]\n{crawled_data.tech_blog}")
-        if crawled_data.jd:
-            parts.append(f"[채용 공고 (JD)]\n{crawled_data.jd}")
-    elif interview_type == "PERSONALITY":
-        if crawled_data.jd:
-            parts.append(f"[채용 공고 (JD)]\n{crawled_data.jd}")
-
-    return "\n\n".join(parts)
+        config = _SOURCE_MAP["DEBATE"]
+    else:
+        config = _SOURCE_MAP.get(interview_type, _SOURCE_MAP["TECHNICAL"])
+    return config["sources"], config["label"]
 
 
 # ──────────────────────────────────────────────
@@ -190,7 +182,8 @@ def build_prompt(
     cover_letter: str,
     resume: Optional[str] = None,
     portfolio: Optional[str] = None,
-    crawled_data: Optional[CrawledData] = None,
+    crawled_context: Optional[str] = None,
+    crawled_label: str = "참고 업계 자료",
     question_count: int = 5,
 ) -> str:
     followup_field = (
@@ -230,9 +223,8 @@ def build_prompt(
     if portfolio:
         sections.append(f"[포트폴리오]\n{portfolio}")
 
-    crawled = _crawled_data_section(interview_type, interview_format, crawled_data)
-    if crawled:
-        sections.append(crawled)
+    if crawled_context:
+        sections.append(f"[{crawled_label}]\n{crawled_context}")
 
     sections.append(generation_instruction)
 
@@ -246,6 +238,22 @@ def build_prompt(
 async def generate_questions(
     request: QuestionGenerateRequest,
 ) -> QuestionGenerateResponse:
+    sources, crawled_label = _resolve_crawled_sources(
+        request.interview_type, request.interview_format,
+    )
+
+    search_query = request.cover_letter[:500].strip()
+    if request.resume:
+        search_query = (search_query + " " + request.resume[:300]).strip()
+
+    try:
+        crawled_context = await asyncio.to_thread(
+            query_crawled_data, search_query, sources,
+        )
+    except Exception as e:
+        logger.warning("ChromaDB 크롤링 데이터 검색 실패: %s", e)
+        crawled_context = ""
+
     system_prompt = build_prompt(
         persona=request.persona,
         pressure_level=request.pressure_level,
@@ -256,7 +264,8 @@ async def generate_questions(
         cover_letter=request.cover_letter,
         resume=request.resume,
         portfolio=request.portfolio,
-        crawled_data=request.crawled_data,
+        crawled_context=crawled_context,
+        crawled_label=crawled_label,
         question_count=request.question_count,
     )
 

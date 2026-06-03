@@ -1,5 +1,6 @@
 import json
 import re
+import uuid
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -18,6 +19,11 @@ from app.schemas.debate import (
     DebateReportRequest, DebateReportResponse, DebateWeaknessItem, DebateTurnFeedback,
 )
 from app.services.llm_service import _client, _parse_json
+from app.services.tts_service import (
+    get_tts_service,
+    get_speaker_for_interviewer,
+    get_speaker_for_persona,
+)
 
 
 # ── 프롬프트 캐싱 ──────────────────────────────────────────────────────────────
@@ -161,7 +167,10 @@ async def generate_interviewer_opening(req: InterviewerOpeningRequest) -> Interv
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
-    return InterviewerOpeningResponse(content=raw["content"])
+    content = raw["content"]
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(content, get_speaker_for_interviewer(), f"interviewer_opening_{uuid.uuid4().hex}")
+    return InterviewerOpeningResponse(content=content, audio_url=audio_url)
 
 
 async def generate_competitor_opening(req: DebateOpeningRequest) -> DebateOpeningResponse:
@@ -184,7 +193,14 @@ async def generate_competitor_opening(req: DebateOpeningRequest) -> DebateOpenin
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
-    return DebateOpeningResponse(content=raw["content"])
+    content = raw["content"]
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(
+        content,
+        get_speaker_for_persona(req.persona.persona_id),
+        f"competitor_opening_{uuid.uuid4().hex}",
+    )
+    return DebateOpeningResponse(content=content, audio_url=audio_url)
 
 
 async def generate_competitor_rebuttal(req: DebateRebuttalRequest) -> DebateRebuttalResponse:
@@ -206,7 +222,14 @@ async def generate_competitor_rebuttal(req: DebateRebuttalRequest) -> DebateRebu
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
-    return DebateRebuttalResponse(content=raw["content"])
+    content = raw["content"]
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(
+        content,
+        get_speaker_for_persona(req.persona.persona_id),
+        f"competitor_rebuttal_{uuid.uuid4().hex}",
+    )
+    return DebateRebuttalResponse(content=content, audio_url=audio_url)
 
 
 async def generate_competitor_closing(req: DebateClosingRequest) -> DebateClosingResponse:
@@ -226,7 +249,14 @@ async def generate_competitor_closing(req: DebateClosingRequest) -> DebateClosin
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
-    return DebateClosingResponse(content=raw["content"])
+    content = raw["content"]
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(
+        content,
+        get_speaker_for_persona(req.persona.persona_id),
+        f"competitor_closing_{uuid.uuid4().hex}",
+    )
+    return DebateClosingResponse(content=content, audio_url=audio_url)
 
 
 async def generate_interviewer_closing(req: InterviewerClosingRequest) -> InterviewerClosingResponse:
@@ -240,7 +270,14 @@ async def generate_interviewer_closing(req: InterviewerClosingRequest) -> Interv
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
-    return InterviewerClosingResponse(content=raw["content"])
+    content = raw["content"]
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(
+        content,
+        get_speaker_for_interviewer(),
+        f"interviewer_closing_{uuid.uuid4().hex}",
+    )
+    return InterviewerClosingResponse(content=content, audio_url=audio_url)
 
 
 # ── 평가/요약/리포트 (model=OPENAI_MODEL 기본값) ──────────────────────────────

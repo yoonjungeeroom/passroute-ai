@@ -29,6 +29,19 @@ class Settings(BaseSettings):
     DEBATE_GENERATION_TIMEOUT: float = 120.0
     DEBATE_EVAL_TIMEOUT: float = 60.0
 
+    # TTS (Google Cloud Text-to-Speech)
+    TTS_ENABLED: bool = False
+    GOOGLE_TTS_CREDENTIALS_JSON: str = ""
+    DEBATE_TTS_INTERVIEWER_SPEAKER: str = "ko-KR-Neural2-A"
+    DEBATE_TTS_PERSONA_SPEAKERS: str = (
+        "persona_01_stable:ko-KR-Neural2-B,"
+        "persona_02_aggressive:ko-KR-Neural2-C,"
+        "persona_03_creative:ko-KR-Neural2-D,"
+        "persona_04_veteran:ko-KR-Wavenet-B,"
+        "persona_05_nondev:ko-KR-Wavenet-A"
+    )
+    TTS_S3_PREFIX: str = "tts/debate"
+
     # SQL 로그 출력 여부 (운영 환경에서는 False)
     SQL_ECHO: bool = False
 

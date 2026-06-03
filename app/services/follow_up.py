@@ -8,7 +8,7 @@ from openai import APIError, APITimeoutError, AsyncOpenAI
 
 from app.core.config import settings
 from app.schemas.follow_up import FollowUpRequest, FollowUpResponse
-from app.services.resume_vector_store import _get_collection, _get_client, _get_embedding_fn
+from app.services.resume_vector_store import _get_collection, query_crawled_data
 
 logger = logging.getLogger(__name__)
 
@@ -204,21 +204,6 @@ _SOURCE_FILTER: dict[str, list[str]] = {
     "personality": ["jobkorea"],
 }
 
-_crawled_collection = None
-
-
-def _get_crawled_collection():
-    """job_descriptions 컬렉션을 캐싱하여 반환한다."""
-    global _crawled_collection
-    if _crawled_collection is None:
-        _crawled_collection = _get_client().get_or_create_collection(
-            name="job_descriptions",
-            embedding_function=_get_embedding_fn(),
-            metadata={"hnsw:space": "cosine"},
-        )
-    return _crawled_collection
-
-
 def _query_resume(user_id: str, search_query: str) -> str:
     """ChromaDB resumes 컬렉션에서 이력서 청크를 검색한다."""
     collection = _get_collection()
@@ -233,33 +218,6 @@ def _query_resume(user_id: str, search_query: str) -> str:
         return ""
 
     return "\n".join(f"- {doc[:300]}" for doc in documents)
-
-
-def _query_crawled_data(search_query: str, sources: list[str]) -> str:
-    """ChromaDB job_descriptions 컬렉션에서 크롤링 데이터를 검색한다."""
-    collection = _get_crawled_collection()
-
-    where_filter = {"source": {"$in": sources}} if len(sources) > 1 else {"source": sources[0]}
-
-    results = collection.query(
-        query_texts=[search_query],
-        n_results=3,
-        where=where_filter,
-    )
-
-    documents = results.get("documents", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
-    if not documents:
-        return ""
-
-    parts = []
-    for doc, meta in zip(documents, metadatas):
-        source = meta.get("source", "")
-        title = meta.get("title", "")
-        label = {"tech_blog": "기술블로그", "jobkorea": "채용공고", "naver_news": "뉴스"}.get(source, source)
-        parts.append(f"- [{label}] {title}: {doc[:300]}")
-
-    return "\n".join(parts)
 
 
 async def search_context(state: FollowUpState) -> dict:
@@ -280,7 +238,7 @@ async def search_context(state: FollowUpState) -> dict:
         if request.user_id
         else _noop()
     )
-    crawled_task = asyncio.to_thread(_query_crawled_data, search_query, sources)
+    crawled_task = asyncio.to_thread(query_crawled_data, search_query, sources)
 
     results = await asyncio.gather(resume_task, crawled_task, return_exceptions=True)
 

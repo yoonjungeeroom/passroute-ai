@@ -27,6 +27,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # ONNX 양자화 모델 + 토크나이저 복사
@@ -40,5 +42,9 @@ COPY . .
 
 # AWS RDS SSL 인증서 다운로드
 RUN curl -o /app/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+# MediaPipe FaceLandmarker 모델 다운로드
+RUN curl -L -o /app/models/face_landmarker.task \
+    https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

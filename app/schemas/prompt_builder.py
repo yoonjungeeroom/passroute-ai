@@ -3,12 +3,6 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class CrawledData(BaseModel):
-    tech_blog: Optional[str] = None
-    jd: Optional[str] = None
-    news: Optional[str] = None
-
-
 class QuestionGenerateRequest(BaseModel):
     persona: Literal["HR_MANAGER", "TEAM_LEAD", "EXECUTIVE", "TECH_INTERVIEWER"]
     pressure_level: int = Field(ge=0, le=10)
@@ -19,7 +13,6 @@ class QuestionGenerateRequest(BaseModel):
     cover_letter: str
     resume: Optional[str] = None
     portfolio: Optional[str] = None
-    crawled_data: Optional[CrawledData] = None
     question_count: int = Field(default=5, ge=1, le=20)
 
 
