@@ -54,7 +54,7 @@ jobs:
           host: ${{ secrets.AI_EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.AI_EC2_SSH_KEY }}
-          envs: ECR_PASSWORD,ECR_REGISTRY,DATABASE_URL,REDIS_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,CHROMADB_HOST,CHROMADB_PORT,EMBEDDING_MODEL,OPENAI_API_KEY
+          envs: ECR_PASSWORD,ECR_REGISTRY,DATABASE_URL,REDIS_URL,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,CHROMADB_HOST,CHROMADB_PORT,EMBEDDING_MODEL,OPENAI_API_KEY,CLOVA_SECRET_KEY,CLOVA_INVOKE_URL
           script: |
             echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin $ECR_REGISTRY
             cd /home/ubuntu/ai-server
@@ -68,6 +68,8 @@ jobs:
             CHROMADB_PORT=$CHROMADB_PORT
             EMBEDDING_MODEL=$EMBEDDING_MODEL
             OPENAI_API_KEY=$OPENAI_API_KEY
+            CLOVA_SECRET_KEY=$CLOVA_SECRET_KEY
+            CLOVA_INVOKE_URL=$CLOVA_INVOKE_URL
             EOF
             docker compose pull
             docker compose up -d
@@ -84,3 +86,5 @@ jobs:
           CHROMADB_PORT: ${{ secrets.CHROMADB_PORT }}
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLOVA_SECRET_KEY: ${{ secrets.CLOVA_SECRET_KEY }}
+          CLOVA_INVOKE_URL: ${{ secrets.CLOVA_INVOKE_URL }}
