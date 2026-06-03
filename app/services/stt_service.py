@@ -31,7 +31,7 @@ def detect_voice(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bool:
             continue
         if vad.is_speech(frame, sample_rate):
             count_speech += 1
-            if count_speech > 6:
+            if count_speech > 1:
                 return True
     return False
 
