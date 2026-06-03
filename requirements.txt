@@ -121,7 +121,7 @@ wrapt==2.1.2
 yarl==1.23.0
 zipp==4.1.0
 langgraph>=0.2.0
-mediapipe==0.10.35
+mediapipe==0.10.21
 opencv-python-headless==4.10.0.84
 boto3>=1.34.0
 google-cloud-texttospeech>=2.16.0
