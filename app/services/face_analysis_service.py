@@ -26,23 +26,14 @@ EAR_THRESHOLD = 0.25
 NOSE_TIP = 1  # nose tip landmark for head centering check
 
 
-_MODEL_BYTES = None
-
-
 def create_face_landmarker():
-    global _MODEL_BYTES
-    if _MODEL_BYTES is None:
-        with open(FACE_LANDMARKER_MODEL_PATH, "rb") as f:
-            _MODEL_BYTES = f.read()
-    base_options = mp.tasks.BaseOptions(
-        model_asset_buffer=_MODEL_BYTES
+    return mp.solutions.face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
     )
-    options = mp.tasks.vision.FaceLandmarkerOptions(
-        base_options=base_options,
-        running_mode=mp.tasks.vision.RunningMode.IMAGE,
-        num_faces=1,
-    )
-    return mp.tasks.vision.FaceLandmarker.create_from_options(options)
 
 
 def _ear(landmarks, eye_indices, w: int, h: int) -> float:
@@ -82,13 +73,12 @@ def _iris_centered(lm) -> bool:
 def analyze_frame(landmarker, frame_bgr: np.ndarray) -> dict:
     h, w = frame_bgr.shape[:2]
     rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    result = landmarker.detect(mp_image)
+    result = landmarker.process(rgb)
 
-    if not result.face_landmarks:
+    if not result.multi_face_landmarks:
         return {"face_detected": False, "gaze_on": False, "blink": False, "ear": 0.0}
 
-    lm = result.face_landmarks[0]
+    lm = result.multi_face_landmarks[0].landmark
 
     left_ear = _ear(lm, LEFT_EYE, w, h)
     right_ear = _ear(lm, RIGHT_EYE, w, h)
