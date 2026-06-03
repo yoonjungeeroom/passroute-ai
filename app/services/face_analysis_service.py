@@ -82,12 +82,13 @@ def _iris_centered(lm) -> bool:
 def analyze_frame(landmarker, frame_bgr: np.ndarray) -> dict:
     h, w = frame_bgr.shape[:2]
     rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    result = landmarker.process(rgb)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = landmarker.detect(mp_image)
 
-    if not result.multi_face_landmarks:
+    if not result.face_landmarks:
         return {"face_detected": False, "gaze_on": False, "blink": False, "ear": 0.0}
 
-    lm = result.multi_face_landmarks[0].landmark
+    lm = result.face_landmarks[0]
 
     left_ear = _ear(lm, LEFT_EYE, w, h)
     right_ear = _ear(lm, RIGHT_EYE, w, h)
