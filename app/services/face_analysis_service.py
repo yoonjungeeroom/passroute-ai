@@ -34,11 +34,12 @@ def create_face_landmarker():
         with open(FACE_LANDMARKER_MODEL_PATH, "rb") as f:
             _MODEL_BYTES = f.read()
     from mediapipe.tasks.python.core.base_options import BaseOptions
-    from mediapipe.tasks.python.vision.face_landmarker import FaceLandmarker, FaceLandmarkerOptions, RunningMode
+    from mediapipe.tasks.python.vision.face_landmarker import FaceLandmarker, FaceLandmarkerOptions
+    from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode
     base_options = BaseOptions(model_asset_buffer=_MODEL_BYTES)
     options = FaceLandmarkerOptions(
         base_options=base_options,
-        running_mode=RunningMode.IMAGE,
+        running_mode=VisionTaskRunningMode.IMAGE,
         num_faces=1,
     )
     return FaceLandmarker.create_from_options(options)
