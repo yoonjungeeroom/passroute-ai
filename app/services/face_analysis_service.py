@@ -2,6 +2,7 @@ import logging
 
 import cv2
 import mediapipe as mp
+from mediapipe.python.solutions import face_mesh as mp_face_mesh
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ NOSE_TIP = 1  # nose tip landmark for head centering check
 
 
 def create_face_landmarker():
-    return mp.solutions.face_mesh.FaceMesh(
+    return mp_face_mesh.FaceMesh(
         static_image_mode=False,
         max_num_faces=1,
         refine_landmarks=True,
