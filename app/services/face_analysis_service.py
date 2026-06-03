@@ -34,15 +34,15 @@ def create_face_landmarker():
     if _MODEL_BYTES is None:
         with open(FACE_LANDMARKER_MODEL_PATH, "rb") as f:
             _MODEL_BYTES = f.read()
-    base_options = mp.tasks.python.BaseOptions(
+    base_options = mp.tasks.BaseOptions(
         model_asset_buffer=_MODEL_BYTES
     )
-    options = mp.tasks.python.vision.FaceLandmarkerOptions(
+    options = mp.tasks.vision.FaceLandmarkerOptions(
         base_options=base_options,
-        running_mode=mp.tasks.python.vision.RunningMode.IMAGE,
+        running_mode=mp.tasks.vision.RunningMode.IMAGE,
         num_faces=1,
     )
-    return mp.tasks.python.vision.FaceLandmarker.create_from_options(options)
+    return mp.tasks.vision.FaceLandmarker.create_from_options(options)
 
 
 def _ear(landmarks, eye_indices, w: int, h: int) -> float:
