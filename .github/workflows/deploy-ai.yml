@@ -8,6 +8,8 @@ on:
       - "requirements.txt"
       - "Dockerfile"
       - "docker-compose.yml"
+      - ".github/workflows/deploy-ai.yml"
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
