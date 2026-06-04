@@ -5,6 +5,8 @@ from app.schemas.debate import (
     DebateRebuttalRequest, DebateRebuttalResponse,
     DebateClosingRequest, DebateClosingResponse,
     InterviewerClosingRequest, InterviewerClosingResponse,
+    DebateTopicSuggestRequest, DebateTopicSuggestResponse,
+    DebateTopicDetailRequest, DebateTopicDetailResponse,
 )
 from app.services.debate_llm_service import (
     generate_interviewer_opening,
@@ -12,6 +14,8 @@ from app.services.debate_llm_service import (
     generate_competitor_rebuttal,
     generate_competitor_closing,
     generate_interviewer_closing,
+    generate_debate_topics,
+    generate_debate_topic_detail,
 )
 
 router = APIRouter(tags=["debate"])
@@ -40,3 +44,15 @@ async def competitor_closing_endpoint(req: DebateClosingRequest) -> DebateClosin
 @router.post("/debate/interviewer-closing", response_model=InterviewerClosingResponse)
 async def interviewer_closing_endpoint(req: InterviewerClosingRequest) -> InterviewerClosingResponse:
     return await generate_interviewer_closing(req)
+
+
+# ── 토론 주제 추천/생성 (크롤링 뉴스 기반) ────────────────────────────────────
+
+@router.post("/debate/topics/suggest", response_model=DebateTopicSuggestResponse)
+async def suggest_debate_topics_endpoint(req: DebateTopicSuggestRequest) -> DebateTopicSuggestResponse:
+    return await generate_debate_topics(req)
+
+
+@router.post("/debate/topics/detail", response_model=DebateTopicDetailResponse)
+async def debate_topic_detail_endpoint(req: DebateTopicDetailRequest) -> DebateTopicDetailResponse:
+    return await generate_debate_topic_detail(req)
