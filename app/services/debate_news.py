@@ -1,16 +1,4 @@
 """토론 주제 생성을 위한 크롤링 뉴스 조회.
-
-진영님의 resume_vector_store.py는 수정하지 않는다. ChromaDB 클라이언트(_get_client)만
-읽기 전용으로 재사용하되, 컬렉션은 임베딩 함수(EF)를 붙이지 않고 get_collection 한다.
-
-[왜 EF를 안 붙이나]
-크롤링 Consumer는 job_descriptions 컬렉션을 '사전 계산된 임베딩'으로 적재해, 컬렉션에는
-default EF가 등록돼 있다. 여기에 get_or_create_collection으로 OnnxEmbeddingFunction을
-넘기면 최신 ChromaDB가 EF 충돌(ValueError)을 던진다.
-또한 EF를 빼고 query_texts로 조회하면 Chroma가 컬렉션의 default EF(다른 모델/차원)로
-쿼리를 임베딩해 KR-SBERT 768차원 저장 벡터와 불일치한다.
-→ 따라서 컬렉션엔 EF를 붙이지 않고, 쿼리 임베딩만 동일한 KR-SBERT 임베더로 직접 계산해
-   query_embeddings로 전달한다.
 """
 import logging
 
