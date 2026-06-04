@@ -30,11 +30,14 @@ def query_news(
         where=where_filter,
     )
 
-    documents = results.get("documents", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
+    raw_documents = results.get("documents")
+    documents = raw_documents[0] if raw_documents else []
+    raw_metadatas = results.get("metadatas")
+    metadatas = raw_metadatas[0] if raw_metadatas else []
 
     items: list[dict] = []
     for doc, meta in zip(documents, metadatas):
+        meta = meta or {}
         items.append({
             "title": meta.get("title", ""),
             "company_name": meta.get("company_name", ""),

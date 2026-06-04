@@ -114,9 +114,9 @@ def _format_news(news_items: list[dict]) -> str:
     lines = []
     for item in news_items:
         company = item.get("company_name") or ""
-        content = (item.get("content") or "").strip().replace("\n", " ")
+        content = (item.get("content") or "").strip()[:300].replace("\n", " ")
         tag = f"[{company}] " if company else ""
-        lines.append(f"- {tag}{content[:300]}")
+        lines.append(f"- {tag}{content}")
     return "\n".join(lines)
 
 
