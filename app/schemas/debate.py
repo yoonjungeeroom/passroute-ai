@@ -203,3 +203,38 @@ class DebateReportResponse(BaseModel):
     recommended_topics: list[str]
     final_advice: str
     debate_readiness_comment: str
+
+
+# ── 토론 주제 추천/생성 (/debate/topics/*) ────────────────────────────────────
+
+TopicCategory = Literal["AI_ETHICS", "RECRUITMENT", "DEV_CULTURE", "TECH_TREND"]
+
+
+class DebateTopicCandidate(BaseModel):
+    title: str
+    description: str
+    category: TopicCategory
+
+
+class DebateTopicSuggestRequest(BaseModel):
+    keywords: list[str] = Field(default_factory=list)
+    count: int = Field(default=3, ge=1, le=5)
+
+
+class DebateTopicSuggestResponse(BaseModel):
+    candidates: list[DebateTopicCandidate]
+    news_count: int
+
+
+class DebateTopicDetailRequest(BaseModel):
+    title: str
+    summary: Optional[str] = None
+    category: Optional[TopicCategory] = None
+
+
+class DebateTopicDetailResponse(BaseModel):
+    topic_title: str
+    category: Optional[TopicCategory] = None
+    topic_description: str
+    pro_key_points: list[str]
+    con_key_points: list[str]
