@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import uuid
@@ -17,7 +18,10 @@ from app.schemas.debate import (
     DebateScoreItemWithWeight, DebateTurnScores, DebateTurnEvalSummary,
     DebateSessionSummaryRequest, DebateSessionSummaryResponse, TurnHighlight,
     DebateReportRequest, DebateReportResponse, DebateWeaknessItem, DebateTurnFeedback,
+    DebateTopicSuggestRequest, DebateTopicSuggestResponse, DebateTopicCandidate,
+    DebateTopicDetailRequest, DebateTopicDetailResponse,
 )
+from app.services.debate_news import query_news
 from app.services.llm_service import _client, _parse_json
 from app.services.tts_service import (
     get_tts_service,
@@ -101,6 +105,19 @@ def _format_history(history) -> str:
 
 def _format_list(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
+
+
+def _format_news(news_items: list[dict]) -> str:
+    """뉴스 조회 결과를 프롬프트용 텍스트로 변환한다."""
+    if not news_items:
+        return "참고할 뉴스가 없습니다. 일반적인 개발자/IT 업계의 최신 쟁점을 활용하세요."
+    lines = []
+    for item in news_items:
+        company = item.get("company_name") or ""
+        content = (item.get("content") or "").strip()[:300].replace("\n", " ")
+        tag = f"[{company}] " if company else ""
+        lines.append(f"- {tag}{content}")
+    return "\n".join(lines)
 
 
 async def _call(
@@ -365,4 +382,52 @@ async def generate_debate_report(req: DebateReportRequest) -> DebateReportRespon
         recommended_topics=raw["recommended_topics"],
         final_advice=raw["final_advice"],
         debate_readiness_comment=raw["debate_readiness_comment"],
+    )
+
+
+# ── 토론 주제 추천/생성 (크롤링 뉴스 기반) ────────────────────────────────────
+
+async def generate_debate_topics(req: DebateTopicSuggestRequest) -> DebateTopicSuggestResponse:
+    """키워드 기반으로 naver_news를 조회하여 토론 주제 후보 N개를 생성한다."""
+    search_query = " ".join(req.keywords).strip()
+    news_items = await asyncio.to_thread(query_news, search_query, None, 8)
+
+    raw = await _call(
+        "topic_candidates",
+        {
+            "keywords_text": ", ".join(req.keywords) if req.keywords else "없음 (일반 주제)",
+            "count": req.count,
+            "news_text": _format_news(news_items),
+        },
+        max_tokens=1024,
+        timeout=settings.DEBATE_GENERATION_TIMEOUT,
+        model=settings.OPENAI_MODEL_DEBATE,
+    )
+
+    candidates = [DebateTopicCandidate(**c) for c in raw["candidates"]]
+    return DebateTopicSuggestResponse(candidates=candidates, news_count=len(news_items))
+
+
+async def generate_debate_topic_detail(req: DebateTopicDetailRequest) -> DebateTopicDetailResponse:
+    """선택된 주제에 대해 뉴스를 다시 조회하여 상세(설명 + 찬/반 논거)를 생성한다."""
+    news_items = await asyncio.to_thread(query_news, req.title, None, 5)
+
+    raw = await _call(
+        "topic_detail",
+        {
+            "title": req.title,
+            "summary": req.summary or "없음",
+            "news_text": _format_news(news_items),
+        },
+        max_tokens=1024,
+        timeout=settings.DEBATE_GENERATION_TIMEOUT,
+        model=settings.OPENAI_MODEL_DEBATE,
+    )
+
+    return DebateTopicDetailResponse(
+        topic_title=req.title,
+        category=req.category,
+        topic_description=raw["topic_description"],
+        pro_key_points=raw["pro_key_points"],
+        con_key_points=raw["con_key_points"],
     )
