@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from typing import Optional
 
 from openai import APIError, APITimeoutError, AsyncOpenAI
@@ -12,6 +13,10 @@ from app.schemas.prompt_builder import (
     QuestionGenerateResponse,
 )
 from app.services.resume_vector_store import query_crawled_data
+from app.services.tts_service import (
+    get_speaker_for_interview_persona,
+    get_tts_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -304,4 +309,35 @@ async def generate_questions(
         logger.error("OpenAI 응답 파싱 실패: %s | raw=%s", e, raw[:300])
         raise ValueError(f"AI 응답 파싱 실패: {e}") from e
 
+    # 1:1 면접 메인 질문 음성 합성 (면접관 페르소나 화자). 토론 포맷은 debate 엔드포인트가 별도 처리.
+    if request.interview_format == "ONE_ON_ONE":
+        await _attach_question_audio(questions, request.persona)
+
     return QuestionGenerateResponse(persona=request.persona, questions=questions)
+
+
+async def _attach_question_audio(
+    questions: list[GeneratedQuestion], persona: str,
+) -> None:
+    """메인 질문들의 음성을 병렬 합성하여 audio_url을 채운다. 실패한 항목은 None 유지."""
+    tts = get_tts_service()
+    speaker = get_speaker_for_interview_persona(persona)
+
+    audio_urls = await asyncio.gather(
+        *(
+            tts.synthesize(
+                q.question,
+                speaker,
+                f"interview_question_{uuid.uuid4().hex}",
+                prefix=settings.INTERVIEW_TTS_S3_PREFIX,
+            )
+            for q in questions
+        ),
+        return_exceptions=True,
+    )
+
+    for q, url in zip(questions, audio_urls):
+        if isinstance(url, Exception):
+            logger.warning("질문 TTS 합성 실패: %s", url)
+            continue
+        q.audio_url = url

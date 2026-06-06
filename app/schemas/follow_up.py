@@ -1,4 +1,4 @@
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,6 +22,9 @@ class FollowUpRequest(BaseModel):
     difficulty: Literal["low", "middle", "high"]
     conversation: list[QATurn] = Field(min_length=1)
     user_id: Union[str, int, None] = None
+    persona: Optional[
+        Literal["HR_MANAGER", "TEAM_LEAD", "EXECUTIVE", "TECH_INTERVIEWER"]
+    ] = None
 
     @field_validator("user_id", mode="before")
     @classmethod
@@ -40,3 +43,4 @@ class FollowUpResponse(BaseModel):
     has_follow_up: bool
     follow_up_question: str | None = None
     reason: str | None = None
+    audio_url: str | None = None

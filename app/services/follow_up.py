@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -9,6 +10,10 @@ from openai import APIError, APITimeoutError, AsyncOpenAI
 from app.core.config import settings
 from app.schemas.follow_up import FollowUpRequest, FollowUpResponse
 from app.services.resume_vector_store import _get_collection, query_crawled_data
+from app.services.tts_service import (
+    get_speaker_for_interview_persona,
+    get_tts_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +327,17 @@ async def generate_question(state: FollowUpState) -> dict:
         logger.error("꼬리 질문 응답 파싱 실패: %s", e)
         result = FollowUpResponse(
             has_follow_up=False, reason="AI 응답 파싱 실패"
+        )
+
+    # 꼬리 질문이 생성된 경우 면접관 페르소나 화자로 음성 합성
+    if result.has_follow_up and result.follow_up_question:
+        tts = get_tts_service()
+        speaker = get_speaker_for_interview_persona(state["request"].persona)
+        result.audio_url = await tts.synthesize(
+            result.follow_up_question,
+            speaker,
+            f"interview_followup_{uuid.uuid4().hex}",
+            prefix=settings.INTERVIEW_TTS_S3_PREFIX,
         )
 
     return {"response": result}

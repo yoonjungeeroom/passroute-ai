@@ -59,9 +59,11 @@ async def test_noop_returns_none():
 
 
 @pytest.mark.asyncio
-async def test_google_tts_success_returns_s3_url(s3_bucket):
+async def test_google_tts_success_returns_s3_url(s3_bucket, monkeypatch):
     from google.cloud.texttospeech_v1.types import SynthesizeSpeechResponse
     from app.services.tts_service import GoogleTtsService
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "AWS_S3_BUCKET_NAME", "test-bucket")
 
     mock_response = MagicMock(spec=SynthesizeSpeechResponse)
     mock_response.audio_content = b"fake-mp3-data"
@@ -126,3 +128,43 @@ def test_speaker_for_known_persona():
 def test_speaker_for_unknown_persona_fallback():
     from app.services.tts_service import get_speaker_for_persona
     assert get_speaker_for_persona("persona_unknown") == "ko-KR-Neural2-A"
+
+
+def test_speaker_for_interview_persona_known():
+    from app.services.tts_service import get_speaker_for_interview_persona
+    assert get_speaker_for_interview_persona("HR_MANAGER") == "ko-KR-Neural2-A"
+    assert get_speaker_for_interview_persona("TEAM_LEAD") == "ko-KR-Neural2-C"
+    assert get_speaker_for_interview_persona("EXECUTIVE") == "ko-KR-Wavenet-D"
+    assert get_speaker_for_interview_persona("TECH_INTERVIEWER") == "ko-KR-Neural2-D"
+
+
+def test_speaker_for_interview_persona_none_and_unknown_fallback():
+    from app.services.tts_service import get_speaker_for_interview_persona
+    assert get_speaker_for_interview_persona(None) == "ko-KR-Neural2-A"
+    assert get_speaker_for_interview_persona("UNKNOWN") == "ko-KR-Neural2-A"
+
+
+@pytest.mark.asyncio
+async def test_google_tts_custom_prefix_in_url(s3_bucket, monkeypatch):
+    from google.cloud.texttospeech_v1.types import SynthesizeSpeechResponse
+    from app.services.tts_service import GoogleTtsService
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "AWS_S3_BUCKET_NAME", "test-bucket")
+
+    mock_response = MagicMock(spec=SynthesizeSpeechResponse)
+    mock_response.audio_content = b"fake-mp3-data"
+
+    svc = object.__new__(GoogleTtsService)
+    svc._tts = AsyncMock()
+    svc._tts.synthesize_speech = AsyncMock(return_value=mock_response)
+    svc._s3 = boto3.client("s3", region_name="ap-northeast-2")
+
+    url = await svc.synthesize(
+        "면접 질문입니다",
+        "ko-KR-Neural2-A",
+        "interview_question_abc123",
+        prefix="tts/interview",
+    )
+
+    assert url is not None
+    assert "tts/interview/interview_question_abc123.mp3" in url
