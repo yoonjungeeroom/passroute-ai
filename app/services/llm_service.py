@@ -1,7 +1,9 @@
 import json
+import logging
 import re
 from openai import AsyncOpenAI, OpenAIError
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.schemas.evaluation import (
@@ -42,7 +44,12 @@ _WEIGHTS: dict[str, dict[str, float | None]] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
 _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=60.0)
+
+# 리포트는 출력이 커서(최대 4096토큰) 기본 60초로는 빠듯하므로 별도 타임아웃을 둔다.
+_REPORT_TIMEOUT = 120.0
 
 def _parse_json(text: str) -> dict:
     text = text.strip()
@@ -313,7 +320,7 @@ JSON만 반환:
     {{
       "question_index": 정수,
       "question": "",
-      "question_type": "",
+      "question_type": "technical 또는 personality",
       "percentage": 숫자,
       "feedback": "인사이트 중심 1~2문장",
       "star_comment": "" 또는 null,
@@ -329,15 +336,35 @@ JSON만 반환:
         system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터를 종합하여 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
         user_prompt=user_prompt,
         max_output_tokens=4096,
+        timeout=_REPORT_TIMEOUT,
     )
-    
-    return ReportGenerationResponse(
-        overall=raw["overall"],
-        strengths=raw["strengths"],
-        weaknesses=[WeaknessItem(**w) for w in raw["weaknesses"]],
-        improvements=raw["improvements"],
-        question_feedback=[QuestionFeedback(**q) for q in raw["question_feedback"]],
-        recommended_questions=raw["recommended_questions"],
-        final_advice=raw["final_advice"],
-        readiness_comment=raw["readiness_comment"],
-    )
+
+    # 리스트 항목은 개별로 검증하여, 일부 항목이 어긋나도 리포트 전체가 실패하지 않도록 한다.
+    weaknesses = []
+    for w in raw.get("weaknesses", []):
+        try:
+            weaknesses.append(WeaknessItem(**w))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 weakness 항목 스킵: %s | %s", e, w)
+
+    question_feedback = []
+    for q in raw.get("question_feedback", []):
+        try:
+            question_feedback.append(QuestionFeedback(**q))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 question_feedback 항목 스킵: %s | %s", e, q)
+
+    try:
+        return ReportGenerationResponse(
+            overall=raw.get("overall", ""),
+            strengths=raw.get("strengths", ""),
+            weaknesses=weaknesses,
+            improvements=raw.get("improvements", ""),
+            question_feedback=question_feedback,
+            recommended_questions=raw.get("recommended_questions", []),
+            final_advice=raw.get("final_advice", ""),
+            readiness_comment=raw.get("readiness_comment", ""),
+        )
+    except ValidationError as e:
+        logger.error("리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"리포트 응답 구성 실패: {e}")
