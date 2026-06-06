@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import re
 import uuid
@@ -327,13 +328,13 @@ async def generate_interviewer_closing(req: InterviewerClosingRequest) -> Interv
 async def generate_interviewer_cue(req: InterviewerCueRequest) -> InterviewerCueResponse:
     # 정형 템플릿이라 LLM 호출 없음. TTS는 고정 문구라 캐싱(같은 오디오 재사용).
     content = _INTERVIEWER_CUE_TEMPLATES[req.cue_type]
+    speaker = get_speaker_for_interviewer()
+    # 화자나 템플릿 문구가 바뀌면 캐시가 자동 무효화되도록 file_key에 화자·콘텐츠 해시를 포함한다.
+    content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()[:8]
+    safe_speaker = speaker.lower().replace("-", "_").replace(":", "_")
+    file_key = f"interviewer_cue_{req.cue_type.lower()}_{safe_speaker}_{content_hash}"
     tts = get_tts_service()
-    audio_url = await tts.synthesize(
-        content,
-        get_speaker_for_interviewer(),
-        f"interviewer_cue_{req.cue_type.lower()}",
-        cache=True,
-    )
+    audio_url = await tts.synthesize(content, speaker, file_key, cache=True)
     return InterviewerCueResponse(content=content, audio_url=audio_url)
 
 
