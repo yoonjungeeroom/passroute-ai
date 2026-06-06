@@ -91,8 +91,8 @@ def _is_insufficient_utterance(content: str) -> bool:
     text = (content or "").strip()
     if not text:
         return True
-    words = [w for w in re.split(r"\s+", text) if w]
-    char_count = len(re.sub(r"\s", "", text))
+    words = text.split()
+    char_count = len("".join(words))
     return char_count < _MIN_EVAL_CHARS or len(words) < _MIN_EVAL_WORDS
 
 
