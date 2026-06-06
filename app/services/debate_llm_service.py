@@ -77,6 +77,24 @@ _ROUND_ACTIVE_FIELDS: dict[str, set[str]] = {
     "MODERATION": {"logic", "attitude"},
 }
 
+# 발언이 비었거나 토막 수준이면 LLM 평가를 건너뛰고 최저점 처리한다.
+# (공백 제외 20자 미만 또는 6어절 미만)
+_MIN_EVAL_CHARS = 20
+_MIN_EVAL_WORDS = 6
+_INSUFFICIENT_FEEDBACK = "발언이 너무 짧거나 불충분하여 평가할 수 없습니다."
+_INSUFFICIENT_IMPROVEMENT = (
+    "발언이 너무 짧아 평가할 수 없습니다. 주장과 근거를 갖춰 충분한 길이로 다시 답변해 주세요."
+)
+
+
+def _is_insufficient_utterance(content: str) -> bool:
+    text = (content or "").strip()
+    if not text:
+        return True
+    words = [w for w in re.split(r"\s+", text) if w]
+    char_count = len(re.sub(r"\s", "", text))
+    return char_count < _MIN_EVAL_CHARS or len(words) < _MIN_EVAL_WORDS
+
 
 # ── 내부 헬퍼 ─────────────────────────────────────────────────────────────────
 
@@ -300,6 +318,22 @@ async def generate_interviewer_closing(req: InterviewerClosingRequest) -> Interv
 # ── 평가/요약/리포트 (model=OPENAI_MODEL 기본값) ──────────────────────────────
 
 async def evaluate_debate_turn(req: DebateTurnEvalRequest) -> DebateTurnEvalResponse:
+    # 토막/무발화는 LLM이 없는 내용을 지어내 고득점을 주므로, 평가 전에 차단한다.
+    if _is_insufficient_utterance(req.user_content):
+        active = _ROUND_ACTIVE_FIELDS.get(req.round_type, {"logic", "attitude"})
+        raw_scores = {
+            field: {"score": 1, "feedback": _INSUFFICIENT_FEEDBACK} for field in active
+        }
+        scores, weighted_score = _renormalize_and_score(raw_scores, req.round_type)
+        return DebateTurnEvalResponse(
+            scores=scores,
+            weighted_score=weighted_score,
+            summary=DebateTurnEvalSummary(
+                strengths="",
+                improvements=_INSUFFICIENT_IMPROVEMENT,
+            ),
+        )
+
     raw = await _call(
         "evaluate_turn",
         {
