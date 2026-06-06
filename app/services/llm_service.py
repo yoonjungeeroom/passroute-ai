@@ -146,14 +146,19 @@ JSON만 반환:
         max_output_tokens=2048,
     )
 
-    scores_raw = raw["llm_scores"]
-    for field in ("accuracy", "depth", "authenticity", "growth"):
-        val = scores_raw.get(field)
+    scores_raw = raw.get("llm_scores", {})
+    # 점수가 null로 온 항목은 dict가 아닌 None으로 정규화한다. (Optional/필수 공통)
+    for field, val in list(scores_raw.items()):
         if isinstance(val, dict) and val.get("score") is None:
             scores_raw[field] = None
 
-    llm_scores = LLMScores(**scores_raw)
-    summary = EvaluationSummary(**raw["summary"])
+    try:
+        llm_scores = LLMScores(**scores_raw)
+        summary = EvaluationSummary(**raw["summary"])
+    except (TypeError, KeyError, ValidationError) as e:
+        logger.error("질문 평가 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"질문 평가 응답 구성 실패: {e}")
+
     return QuestionEvaluationResponse(
         llm_scores=_merge_weights(llm_scores, req.question_type),
         summary=summary,
