@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     )
     TTS_S3_PREFIX: str = "tts/debate"
 
+    # 1:1 면접 TTS (면접관 페르소나별 화자)
+    INTERVIEW_TTS_PERSONA_SPEAKERS: str = (
+        "HR_MANAGER:ko-KR-Neural2-A,"
+        "TEAM_LEAD:ko-KR-Neural2-C,"
+        "EXECUTIVE:ko-KR-Wavenet-D,"
+        "TECH_INTERVIEWER:ko-KR-Neural2-D"
+    )
+    INTERVIEW_TTS_S3_PREFIX: str = "tts/interview"
+
     # SQL 로그 출력 여부 (운영 환경에서는 False)
     SQL_ECHO: bool = False
 
