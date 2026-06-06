@@ -329,16 +329,20 @@ async def generate_question(state: FollowUpState) -> dict:
             has_follow_up=False, reason="AI 응답 파싱 실패"
         )
 
-    # 꼬리 질문이 생성된 경우 면접관 페르소나 화자로 음성 합성
+    # 꼬리 질문이 생성된 경우 면접관 페르소나 화자로 음성 합성.
+    # TTS는 부가 기능이므로 실패해도 꼬리 질문 생성 자체는 정상 반환한다.
     if result.has_follow_up and result.follow_up_question:
-        tts = get_tts_service()
-        speaker = get_speaker_for_interview_persona(state["request"].persona)
-        result.audio_url = await tts.synthesize(
-            result.follow_up_question,
-            speaker,
-            f"interview_followup_{uuid.uuid4().hex}",
-            prefix=settings.INTERVIEW_TTS_S3_PREFIX,
-        )
+        try:
+            tts = get_tts_service()
+            speaker = get_speaker_for_interview_persona(state["request"].persona)
+            result.audio_url = await tts.synthesize(
+                result.follow_up_question,
+                speaker,
+                f"interview_followup_{uuid.uuid4().hex}",
+                prefix=settings.INTERVIEW_TTS_S3_PREFIX,
+            )
+        except Exception as e:
+            logger.warning("꼬리 질문 TTS 합성 실패: %s", e)
 
     return {"response": result}
 
