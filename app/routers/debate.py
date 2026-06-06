@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.schemas.debate import (
     InterviewerOpeningRequest, InterviewerOpeningResponse,
+    InterviewerCueRequest, InterviewerCueResponse,
     DebateOpeningRequest, DebateOpeningResponse,
     DebateRebuttalRequest, DebateRebuttalResponse,
     DebateClosingRequest, DebateClosingResponse,
@@ -10,6 +11,7 @@ from app.schemas.debate import (
 )
 from app.services.debate_llm_service import (
     generate_interviewer_opening,
+    generate_interviewer_cue,
     generate_competitor_opening,
     generate_competitor_rebuttal,
     generate_competitor_closing,
@@ -44,6 +46,11 @@ async def competitor_closing_endpoint(req: DebateClosingRequest) -> DebateClosin
 @router.post("/debate/interviewer-closing", response_model=InterviewerClosingResponse)
 async def interviewer_closing_endpoint(req: InterviewerClosingRequest) -> InterviewerClosingResponse:
     return await generate_interviewer_closing(req)
+
+
+@router.post("/debate/interviewer-cue", response_model=InterviewerCueResponse)
+async def interviewer_cue_endpoint(req: InterviewerCueRequest) -> InterviewerCueResponse:
+    return await generate_interviewer_cue(req)
 
 
 # ── 토론 주제 추천/생성 (크롤링 뉴스 기반) ────────────────────────────────────

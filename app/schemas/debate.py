@@ -46,6 +46,19 @@ class InterviewerOpeningResponse(BaseModel):
     audio_url: str | None = None
 
 
+# 라운드 전환 진행 멘트(cue). 정형 템플릿 기반이라 추가 컨텍스트가 필요 없다.
+InterviewerCueType = Literal["REBUTTAL_START", "REBUTTAL_EXTRA", "CLOSING_GUIDE"]
+
+
+class InterviewerCueRequest(BaseModel):
+    cue_type: InterviewerCueType
+
+
+class InterviewerCueResponse(BaseModel):
+    content: str
+    audio_url: str | None = None
+
+
 class DebateOpeningRequest(BaseModel):
     topic_title: str
     topic_description: str
