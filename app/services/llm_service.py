@@ -146,15 +146,21 @@ JSON만 반환:
         max_output_tokens=2048,
     )
 
-    scores_raw = raw.get("llm_scores", {})
+    scores_raw = raw.get("llm_scores")
+    if not isinstance(scores_raw, dict):
+        scores_raw = {}
     # 점수가 null로 온 항목은 dict가 아닌 None으로 정규화한다. (Optional/필수 공통)
     for field, val in list(scores_raw.items()):
         if isinstance(val, dict) and val.get("score") is None:
             scores_raw[field] = None
 
+    raw_summary = raw.get("summary")
+    if not isinstance(raw_summary, dict):
+        raw_summary = {}
+
     try:
         llm_scores = LLMScores(**scores_raw)
-        summary = EvaluationSummary(**raw["summary"])
+        summary = EvaluationSummary(**raw_summary)
     except (TypeError, KeyError, ValidationError) as e:
         logger.error("질문 평가 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
         raise HTTPException(status_code=500, detail=f"질문 평가 응답 구성 실패: {e}")
@@ -345,30 +351,36 @@ JSON만 반환:
     )
 
     # 리스트 항목은 개별로 검증하여, 일부 항목이 어긋나도 리포트 전체가 실패하지 않도록 한다.
+    # LLM이 리스트 필드를 null로 주거나 항목이 dict가 아니어도 안전하게 건너뛴다.
     weaknesses = []
-    for w in raw.get("weaknesses", []):
+    for w in raw.get("weaknesses") or []:
+        if not isinstance(w, dict):
+            continue
         try:
             weaknesses.append(WeaknessItem(**w))
         except (TypeError, ValidationError) as e:
             logger.warning("리포트 weakness 항목 스킵: %s | %s", e, w)
 
     question_feedback = []
-    for q in raw.get("question_feedback", []):
+    for q in raw.get("question_feedback") or []:
+        if not isinstance(q, dict):
+            continue
         try:
             question_feedback.append(QuestionFeedback(**q))
         except (TypeError, ValidationError) as e:
             logger.warning("리포트 question_feedback 항목 스킵: %s | %s", e, q)
 
+    # 텍스트/리스트 필드가 null로 와도 기본값으로 대체한다. (get(k, default)는 값이 null이면 None을 그대로 반환)
     try:
         return ReportGenerationResponse(
-            overall=raw.get("overall", ""),
-            strengths=raw.get("strengths", ""),
+            overall=raw.get("overall") or "",
+            strengths=raw.get("strengths") or "",
             weaknesses=weaknesses,
-            improvements=raw.get("improvements", ""),
+            improvements=raw.get("improvements") or "",
             question_feedback=question_feedback,
-            recommended_questions=raw.get("recommended_questions", []),
-            final_advice=raw.get("final_advice", ""),
-            readiness_comment=raw.get("readiness_comment", ""),
+            recommended_questions=raw.get("recommended_questions") or [],
+            final_advice=raw.get("final_advice") or "",
+            readiness_comment=raw.get("readiness_comment") or "",
         )
     except ValidationError as e:
         logger.error("리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])

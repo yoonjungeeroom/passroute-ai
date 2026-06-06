@@ -103,6 +103,51 @@ async def test_report_skips_malformed_items_and_fills_defaults():
 
 
 @pytest.mark.asyncio
+async def test_report_handles_null_list_and_text_fields():
+    """LLM이 리스트/텍스트 필드를 null로 반환해도 크래시 없이 기본값으로 리포트가 생성된다."""
+    from app.services import llm_service
+
+    fake_raw = {
+        "overall": None,
+        "strengths": None,
+        "improvements": None,
+        "weaknesses": None,          # null 리스트 → for 루프 TypeError 방지
+        "question_feedback": None,   # null 리스트
+        "recommended_questions": None,
+        "final_advice": None,
+        "readiness_comment": None,
+    }
+
+    with patch.object(llm_service, "_call_llm_json", new=AsyncMock(return_value=fake_raw)):
+        result = await llm_service.generate_report(_make_report_request())
+
+    assert result.overall == ""
+    assert result.weaknesses == []
+    assert result.question_feedback == []
+    assert result.recommended_questions == []
+    assert result.readiness_comment == ""
+
+
+@pytest.mark.asyncio
+async def test_evaluate_question_null_llm_scores_returns_clean_500():
+    """llm_scores가 null로 와도 AttributeError가 아니라 명확한 HTTPException(500)으로 수렴한다."""
+    from fastapi import HTTPException
+    from app.schemas.evaluation import QuestionEvaluationRequest
+    from app.services import llm_service
+
+    req = QuestionEvaluationRequest(
+        job_title="백엔드", company_name="테스트", jd_keywords=["JWT"],
+        question_type="technical", question="JWT란?", answer="토큰 기반 인증",
+    )
+    fake_raw = {"llm_scores": None, "summary": None}
+
+    with patch.object(llm_service, "_call_llm_json", new=AsyncMock(return_value=fake_raw)):
+        with pytest.raises(HTTPException) as exc:
+            await llm_service.evaluate_question(req)
+    assert exc.value.status_code == 500
+
+
+@pytest.mark.asyncio
 async def test_report_uses_report_timeout():
     """리포트 호출은 전역 60초가 아니라 _REPORT_TIMEOUT을 명시적으로 넘긴다."""
     from app.services import llm_service
