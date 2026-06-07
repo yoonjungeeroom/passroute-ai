@@ -314,7 +314,8 @@ async def generate_interviewer_closing(req: InterviewerClosingRequest) -> Interv
         },
         max_tokens=384,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
-        model=settings.OPENAI_MODEL_DEBATE,
+        # 면접관 마무리도 정형 진행 멘트라 빠른 모델로 충분
+        model=settings.OPENAI_MODEL,
     )
     content = raw["content"]
     tts = get_tts_service()
