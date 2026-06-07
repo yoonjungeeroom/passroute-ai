@@ -32,7 +32,7 @@ JSON 형식으로만 반환합니다.
 작성 지침:
 - 라운드별 평가 데이터의 user_content(발언 원문)와 summary를 함께 근거로 사용한다.
   발언 내용을 직접 인용/지목해 "어느 발언의 어느 부분이 왜 그 평가를 받았는지"를 밝힌다.
-- overall·strengths·weaknesses.comment·improvements·strategy_analysis·final_advice·turn_feedback.feedback 등
+- overall·strengths·weaknesses.comment·improvements·strategy_analysis·final_advice·debate_readiness_comment·turn_feedback.feedback 등
   모든 산문에서 라운드를 지칭할 때 영어 코드(OPENING/REBUTTAL_1/REBUTTAL_2/CLOSING/MODERATION) 대신
   한국어(입론/반박 1/반박 2/마무리/사회)로 표기한다. round_type 필드 값에만 영어 코드를 둔다.
 - overall: 토론 전반 흐름 기반 2~3문장. 반복 패턴과 전반적 인상 중심.
@@ -63,9 +63,9 @@ JSON만 반환:
   "weaknesses": [{{"item": "항목명", "comment": "왜 약점인지 1문장"}}],
   "improvements": "",
   "turn_feedback": [
-    {{"round_type": "OPENING", "weighted_score": 숫자, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}},
-    {{"round_type": "REBUTTAL_1", "weighted_score": 숫자, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}},
-    {{"round_type": "CLOSING", "weighted_score": 숫자, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}}
+    {{"round_type": "OPENING", "weighted_score": 0.0, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}},
+    {{"round_type": "REBUTTAL_1", "weighted_score": 0.0, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}},
+    {{"round_type": "CLOSING", "weighted_score": 0.0, "feedback": "발언 인용 + 근거 + 보완 방향 2~3문장"}}
   ],
   "strategy_analysis": "",
   "recommended_topics": ["주제1", "주제2", "주제3"],
