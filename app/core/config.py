@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+    # 평가·리포트는 답변 근거를 인용한 깊이 있는 분석이 필요해 더 강한 모델을 쓴다.
+    OPENAI_MODEL_EVALUATION: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     CLOVA_SECRET_KEY: str = ""

@@ -178,6 +178,9 @@ class QuestionEvalForReport(BaseModel):
     question_index: int
     question_type: Literal["technical", "personality"]
     question: str
+    # 답변 원문(STT). 리포트가 "어떤 답변의 어느 부분이 왜 문제인지"를 근거로 들도록 전달한다.
+    # 백엔드 점진 롤아웃을 위해 Optional로 두며, 없으면 기존처럼 요약 기반으로만 작성한다.
+    answer: Optional[str] = None
     percentage: float = Field(ge=0, le=100)
     summary: EvaluationSummary
     star_evaluation: StarEvalForReport
