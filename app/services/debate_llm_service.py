@@ -338,7 +338,7 @@ async def generate_interviewer_cue(req: InterviewerCueRequest) -> InterviewerCue
     return InterviewerCueResponse(content=content, audio_url=audio_url)
 
 
-# ── 평가/요약/리포트 (model=OPENAI_MODEL 기본값) ──────────────────────────────
+# ── 평가/요약/리포트 (model=OPENAI_MODEL_EVALUATION) ──────────────────────────
 
 async def evaluate_debate_turn(req: DebateTurnEvalRequest) -> DebateTurnEvalResponse:
     # 토막/무발화는 LLM이 없는 내용을 지어내 고득점을 주므로, 평가 전에 차단한다.
@@ -370,6 +370,7 @@ async def evaluate_debate_turn(req: DebateTurnEvalRequest) -> DebateTurnEvalResp
         },
         max_tokens=1500,
         timeout=settings.DEBATE_EVAL_TIMEOUT,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
     scores, weighted_score = _renormalize_and_score(raw["scores"], req.round_type)
     return DebateTurnEvalResponse(
@@ -398,6 +399,7 @@ async def generate_debate_session_summary(
         },
         max_tokens=1024,
         timeout=settings.DEBATE_EVAL_TIMEOUT,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
     return DebateSessionSummaryResponse(
         overall=raw["overall"],
@@ -428,6 +430,7 @@ async def generate_debate_report(req: DebateReportRequest) -> DebateReportRespon
         },
         max_tokens=3000,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
     return DebateReportResponse(
         overall=raw["overall"],
