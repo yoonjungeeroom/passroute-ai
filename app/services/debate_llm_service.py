@@ -60,10 +60,35 @@ _ROUND_LABELS = {
     "CLOSING": "마무리",
     "MODERATION": "사회",
 }
-_DIFFICULTY_GUIDES = {
-    "EASY": "논거를 단순하게 제시하고 발언을 간결하게 유지한다.",
-    "NORMAL": "균형 있는 논리를 전개하며 적절한 근거를 제시한다.",
-    "HARD": "날카로운 반박과 구체적 근거를 제시하며 적극적으로 논점을 공략한다.",
+# 난이도는 '논증 깊이·근거 수·길이·약점 공략 정도'만 조절한다.
+# 말투·공격성·스타일은 페르소나가 결정하므로 난이도 가이드는 톤을 건드리지 않는다.
+# 입론·반박(argue)과 마무리(closing)는 규칙이 달라(마무리는 새 논거 금지) 가이드를 분리한다.
+_DIFFICULTY_GUIDES: dict[str, dict[str, str]] = {
+    "argue": {
+        "EASY": (
+            "- 논거는 1개만, 일반적인 수준으로 제시한다.\n"
+            "- (상대 발언이 주어지면) 허점을 깊이 파고들지 않고 가볍게만 다룬다.\n"
+            "- 근거는 추상적이어도 무방하며 짧게(약 120~180자) 말한다."
+        ),
+        "NORMAL": (
+            "- 논거는 2개, 적절한 근거와 함께 제시한다.\n"
+            "- (상대 발언이 주어지면) 핵심 허점 1가지를 지목해 반박한다.\n"
+            "- 보통 길이(약 220~300자)로 전개한다."
+        ),
+        "HARD": (
+            "- 논거는 3개 이상, 구체적 사례·수치·인과관계까지 들어 깊이 있게 전개한다.\n"
+            "- (상대 발언이 주어지면) 그 표현을 직접 인용해 논리적 허점·근거 부족을 정확히 짚어 반박한다.\n"
+            "- 밀도 있게(약 340~400자) 말하며 핵심 논점을 빠짐없이 다룬다."
+        ),
+    },
+    "closing": {
+        "EASY": "- 핵심 입장만 짧고 일반적인 수준으로 재정리한다(약 120~180자).",
+        "NORMAL": "- 주요 논거 2개를 근거와 함께 재정리한다(약 220~300자).",
+        "HARD": (
+            "- 토론 전체 흐름을 근거의 구체성까지 살려 밀도 있게 재정리한다(약 340~400자).\n"
+            "- 새로운 논거는 추가하지 않고 기존 논거의 강조·정리에 집중한다."
+        ),
+    },
 }
 _DEBATE_WEIGHTS: dict[str, float] = {
     "logic": 0.35,
@@ -233,9 +258,9 @@ async def generate_competitor_opening(req: DebateOpeningRequest) -> DebateOpenin
             "my_key_points_text": _format_list(my_points),
             "opponent_key_points_text": _format_list(opp_points),
             "difficulty": req.difficulty,
-            "difficulty_guide": _DIFFICULTY_GUIDES[req.difficulty],
+            "difficulty_guide": _DIFFICULTY_GUIDES["argue"][req.difficulty],
         },
-        max_tokens=512,
+        max_tokens=768,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
@@ -262,9 +287,9 @@ async def generate_competitor_rebuttal(req: DebateRebuttalRequest) -> DebateRebu
             "opponent_latest_turn": req.opponent_latest_turn,
             "history_text": _format_history(req.history),
             "difficulty": req.difficulty,
-            "difficulty_guide": _DIFFICULTY_GUIDES[req.difficulty],
+            "difficulty_guide": _DIFFICULTY_GUIDES["argue"][req.difficulty],
         },
-        max_tokens=512,
+        max_tokens=768,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
@@ -289,9 +314,9 @@ async def generate_competitor_closing(req: DebateClosingRequest) -> DebateClosin
             "stance_label": _STANCE_LABELS[req.stance],
             "history_text": _format_history(req.history),
             "difficulty": req.difficulty,
-            "difficulty_guide": _DIFFICULTY_GUIDES[req.difficulty],
+            "difficulty_guide": _DIFFICULTY_GUIDES["closing"][req.difficulty],
         },
-        max_tokens=512,
+        max_tokens=768,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
