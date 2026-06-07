@@ -345,7 +345,7 @@ async def evaluate_debate_turn(req: DebateTurnEvalRequest) -> DebateTurnEvalResp
             "history_text": _format_history(req.history),
             "round_type": req.round_type,
         },
-        max_tokens=1024,
+        max_tokens=1500,
         timeout=settings.DEBATE_EVAL_TIMEOUT,
     )
     scores, weighted_score = _renormalize_and_score(raw["scores"], req.round_type)
@@ -403,8 +403,8 @@ async def generate_debate_report(req: DebateReportRequest) -> DebateReportRespon
             ),
             "average_weighted_score": avg_score,
         },
-        max_tokens=2048,
-        timeout=settings.DEBATE_EVAL_TIMEOUT,
+        max_tokens=3000,
+        timeout=settings.DEBATE_GENERATION_TIMEOUT,
     )
     return DebateReportResponse(
         overall=raw["overall"],
