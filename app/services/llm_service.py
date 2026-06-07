@@ -116,27 +116,42 @@ async def evaluate_question(req: QuestionEvaluationRequest) -> QuestionEvaluatio
 - technical 전용: accuracy, depth
 - personality 전용: authenticity, growth
 
+[feedback 작성 원칙 — 반드시 준수]
+- 각 항목 feedback은 "그 점수를 준 근거"를 답변 내용에 기반해 구체적으로 적는다.
+  추상적 표현("깊이가 부족함", "구체적이지 않음")만 쓰지 말고, 답변의 어느 부분 때문인지 밝힌다.
+- 답변에 실제로 있는 표현·키워드를 인용/지목한다. 답변에 없는 내용을 있는 것처럼 평가하지 않는다.
+- 감점 항목(3점 이하)은 "무엇이 빠졌는지 + 어떻게 고치면 되는지"를 함께 적는다.
+- 형식 예시:
+  · depth 3: "Redis로 캐싱했다"고 답했으나 왜 Memcached가 아닌 Redis인지, TTL·메모리 트레이드오프 언급이 없음. 선택의 비교 근거를 덧붙이면 좋음.
+  · specificity 2: "협업을 잘했다"는 평가만 있고 구체적 상황·역할·수치가 없음. STAR 형태로 사례 한 개를 풀어 쓰면 설득력이 올라감.
+- 답변이 비었거나 질문과 무관하면 해당 항목을 1~2점으로 주고 그 사유를 feedback에 명시한다.
+
+[summary 작성 원칙]
+- strengths/improvements도 답변 내용을 근거로 구체적으로 작성한다.
+- improvements는 "~한 답변은 ~해서 ~이 필요해 보입니다" 형태로, 무엇을 어떻게 보완할지 명시한다.
+
 JSON만 반환:
 {{
   "llm_scores": {{
-    "relevance":     {{"score": 정수, "feedback": ""}},
-    "logic":         {{"score": 정수, "feedback": ""}},
-    "specificity":   {{"score": 정수, "feedback": ""}},
-    "conciseness":   {{"score": 정수, "feedback": ""}},
-    "clarity":       {{"score": 정수, "feedback": ""}},
-    "accuracy":      {{"score": 정수, "feedback": ""}} 또는 null,
-    "depth":         {{"score": 정수, "feedback": ""}} 또는 null,
-    "job_relevance": {{"score": 정수, "feedback": ""}},
-    "authenticity":  {{"score": 정수, "feedback": ""}} 또는 null,
-    "growth":        {{"score": 정수, "feedback": ""}} 또는 null
+    "relevance":     {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "logic":         {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "specificity":   {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "conciseness":   {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "clarity":       {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "accuracy":      {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "depth":         {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "job_relevance": {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "authenticity":  {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "growth":        {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null
   }},
-  "summary": {{"strengths": "강점 1~2문장", "improvements": "개선 방향 1~2문장"}}
+  "summary": {{"strengths": "답변 근거 기반 강점 1~2문장", "improvements": "답변 근거 기반 개선 방향 1~2문장"}}
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하고 JSON 형식으로만 반환합니다. JSON 외 텍스트는 포함하지 마세요.",
+        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하되, 각 점수의 근거를 답변 내용에 기반해 구체적으로 제시합니다. JSON 형식으로만 반환하며 JSON 외 텍스트는 포함하지 마세요.",
         user_prompt=user_prompt,
-        max_output_tokens=2048,
+        max_output_tokens=3500,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
 
     scores_raw = raw["llm_scores"]
@@ -249,6 +264,7 @@ JSON만 반환:
         system_prompt="당신은 채용 면접 평가 전문가입니다. 세션 전체의 평가 결과를 바탕으로 종합 피드백을 생성합니다. JSON 형식으로만 반환합니다.",
         user_prompt=user_prompt,
         max_output_tokens=1024,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
 
     highlights = [QuestionHighlight(**h) for h in raw["question_highlights"]]
@@ -293,11 +309,12 @@ async def generate_report(req: ReportGenerationRequest) -> ReportGenerationRespo
 ---
 
 작성 지침:
+- 각 질문 데이터의 answer(답변 원문)와 summary를 함께 근거로 사용한다. answer가 있으면 그 내용을 직접 인용/지목해 평가하고, answer가 null이면 summary 기반으로만 작성한다.
 - overall: 세션 전체 흐름 기반 2~3문장. 반복 패턴과 전반적 인상 중심으로 작성.
-- strengths: 세션 전반에서 일관되게 잘한 점 1~2문장.
-- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조로 구성.
+- strengths: 세션 전반에서 일관되게 잘한 점 1~2문장. 어떤 답변에서 드러났는지 구체적으로.
+- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조로 구성. comment는 어느 답변의 어떤 부분 때문에 약점인지 근거를 든다.
 - improvements: 구체적 행동 방향 1~2문장. "열심히 하세요" 같은 추상적 표현 금지.
-- question_feedback: 각 질문에 대해 점수 나열 아닌 인사이트 중심 1~2문장. star_comment는 applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
+- question_feedback: 각 질문에 대해 점수 나열이 아니라, "이런 답변(인용)은 ~한 점이 ~해서 ~이 필요합니다" 형태로 답변의 어느 부분이 왜 그 평가를 받았고 어떻게 고치면 되는지 2~3문장으로 구체적으로 작성. star_comment는 applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
 - voice_highlight 데이터는 별도 필드 출력 없이 overall/strengths/improvements에 자연스럽게 반영.
 - recommended_questions: 이번 세션의 약점과 부족한 답변을 바탕으로 다음 연습에서 풀어볼 면접 질문 3개. 직무와 약점 항목에 맞게 구체적으로 작성. 질문 텍스트만 문자열로 반환.
 - final_advice: 다음 면접 연습을 위한 가장 중요한 조언 1~2문장.
@@ -315,7 +332,7 @@ JSON만 반환:
       "question": "",
       "question_type": "",
       "percentage": 숫자,
-      "feedback": "인사이트 중심 1~2문장",
+      "feedback": "답변 인용 + 근거 + 개선 방향 2~3문장",
       "star_comment": "" 또는 null,
       "voice_comment": "" 또는 null
     }}
@@ -326,9 +343,11 @@ JSON만 반환:
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터를 종합하여 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
+        system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터와 답변 원문을 종합하여, 점수의 근거와 개선 방향을 답변 내용에 기반해 구체적으로 제시하는 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
         user_prompt=user_prompt,
-        max_output_tokens=4096,
+        max_output_tokens=6000,
+        timeout=_REPORT_TIMEOUT,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
     
     return ReportGenerationResponse(
