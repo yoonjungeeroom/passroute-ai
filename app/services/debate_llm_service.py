@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import re
 import uuid
@@ -10,6 +11,7 @@ from openai import OpenAIError
 from app.core.config import settings
 from app.schemas.debate import (
     InterviewerOpeningRequest, InterviewerOpeningResponse,
+    InterviewerCueRequest, InterviewerCueResponse,
     DebateOpeningRequest, DebateOpeningResponse,
     DebateRebuttalRequest, DebateRebuttalResponse,
     DebateClosingRequest, DebateClosingResponse,
@@ -75,6 +77,14 @@ _ROUND_ACTIVE_FIELDS: dict[str, set[str]] = {
     "REBUTTAL_2": {"logic", "rebuttal_quality", "consistency", "attitude"},
     "CLOSING":    {"logic", "consistency", "attitude"},
     "MODERATION": {"logic", "attitude"},
+}
+
+# 라운드 전환 진행 멘트(cue) — 절차적·정형 문구라 LLM 없이 고정 템플릿 사용.
+# 사용자가 각 라운드를 먼저 시작하는 흐름을 안내한다.
+_INTERVIEWER_CUE_TEMPLATES: dict[str, str] = {
+    "REBUTTAL_START": "양측의 입론이 모두 끝났습니다. 이제 반박 라운드를 시작하겠습니다. 사용자 측부터 상대방의 주장에 반박해 주세요.",
+    "REBUTTAL_EXTRA": "반박을 한 차례 더 진행하겠습니다. 사용자 측부터 추가로 반박해 주세요.",
+    "CLOSING_GUIDE": "이제 토론을 마무리하겠습니다. 마지막으로 사용자 측부터 최종 변론을 말씀해 주세요.",
 }
 
 # 발언이 비었거나 토막 수준이면 LLM 평가를 건너뛰고 최저점 처리한다.
@@ -313,6 +323,19 @@ async def generate_interviewer_closing(req: InterviewerClosingRequest) -> Interv
         f"interviewer_closing_{uuid.uuid4().hex}",
     )
     return InterviewerClosingResponse(content=content, audio_url=audio_url)
+
+
+async def generate_interviewer_cue(req: InterviewerCueRequest) -> InterviewerCueResponse:
+    # 정형 템플릿이라 LLM 호출 없음. TTS는 고정 문구라 캐싱(같은 오디오 재사용).
+    content = _INTERVIEWER_CUE_TEMPLATES[req.cue_type]
+    speaker = get_speaker_for_interviewer()
+    # 화자나 템플릿 문구가 바뀌면 캐시가 자동 무효화되도록 file_key에 화자·콘텐츠 해시를 포함한다.
+    content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()[:8]
+    safe_speaker = speaker.lower().replace("-", "_").replace(":", "_")
+    file_key = f"interviewer_cue_{req.cue_type.lower()}_{safe_speaker}_{content_hash}"
+    tts = get_tts_service()
+    audio_url = await tts.synthesize(content, speaker, file_key, cache=True)
+    return InterviewerCueResponse(content=content, audio_url=audio_url)
 
 
 # ── 평가/요약/리포트 (model=OPENAI_MODEL 기본값) ──────────────────────────────

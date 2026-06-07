@@ -1,7 +1,9 @@
 import json
+import logging
 import re
 from openai import AsyncOpenAI, OpenAIError
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.schemas.evaluation import (
@@ -42,7 +44,12 @@ _WEIGHTS: dict[str, dict[str, float | None]] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
 _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=60.0)
+
+# 리포트는 출력이 커서(최대 6000토큰) 기본 60초로는 빠듯하므로 별도 타임아웃을 둔다.
+_REPORT_TIMEOUT = 120.0
 
 def _parse_json(text: str) -> dict:
     text = text.strip()
@@ -154,14 +161,25 @@ JSON만 반환:
         model=settings.OPENAI_MODEL_EVALUATION,
     )
 
-    scores_raw = raw["llm_scores"]
-    for field in ("accuracy", "depth", "authenticity", "growth"):
-        val = scores_raw.get(field)
+    scores_raw = raw.get("llm_scores")
+    if not isinstance(scores_raw, dict):
+        scores_raw = {}
+    # 점수가 null로 온 항목은 dict가 아닌 None으로 정규화한다. (Optional/필수 공통)
+    for field, val in list(scores_raw.items()):
         if isinstance(val, dict) and val.get("score") is None:
             scores_raw[field] = None
 
-    llm_scores = LLMScores(**scores_raw)
-    summary = EvaluationSummary(**raw["summary"])
+    raw_summary = raw.get("summary")
+    if not isinstance(raw_summary, dict):
+        raw_summary = {}
+
+    try:
+        llm_scores = LLMScores(**scores_raw)
+        summary = EvaluationSummary(**raw_summary)
+    except (TypeError, KeyError, ValidationError) as e:
+        logger.error("질문 평가 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"질문 평가 응답 구성 실패: {e}")
+
     return QuestionEvaluationResponse(
         llm_scores=_merge_weights(llm_scores, req.question_type),
         summary=summary,
@@ -330,7 +348,7 @@ JSON만 반환:
     {{
       "question_index": 정수,
       "question": "",
-      "question_type": "",
+      "question_type": "technical 또는 personality",
       "percentage": 숫자,
       "feedback": "답변 인용 + 근거 + 개선 방향 2~3문장",
       "star_comment": "" 또는 null,
@@ -349,14 +367,39 @@ JSON만 반환:
         timeout=_REPORT_TIMEOUT,
         model=settings.OPENAI_MODEL_EVALUATION,
     )
-    
-    return ReportGenerationResponse(
-        overall=raw["overall"],
-        strengths=raw["strengths"],
-        weaknesses=[WeaknessItem(**w) for w in raw["weaknesses"]],
-        improvements=raw["improvements"],
-        question_feedback=[QuestionFeedback(**q) for q in raw["question_feedback"]],
-        recommended_questions=raw["recommended_questions"],
-        final_advice=raw["final_advice"],
-        readiness_comment=raw["readiness_comment"],
-    )
+
+    # 리스트 항목은 개별로 검증하여, 일부 항목이 어긋나도 리포트 전체가 실패하지 않도록 한다.
+    # LLM이 리스트 필드를 null로 주거나 항목이 dict가 아니어도 안전하게 건너뛴다.
+    weaknesses = []
+    for w in raw.get("weaknesses") or []:
+        if not isinstance(w, dict):
+            continue
+        try:
+            weaknesses.append(WeaknessItem(**w))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 weakness 항목 스킵: %s | %s", e, w)
+
+    question_feedback = []
+    for q in raw.get("question_feedback") or []:
+        if not isinstance(q, dict):
+            continue
+        try:
+            question_feedback.append(QuestionFeedback(**q))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 question_feedback 항목 스킵: %s | %s", e, q)
+
+    # 텍스트/리스트 필드가 null로 와도 기본값으로 대체한다. (get(k, default)는 값이 null이면 None을 그대로 반환)
+    try:
+        return ReportGenerationResponse(
+            overall=raw.get("overall") or "",
+            strengths=raw.get("strengths") or "",
+            weaknesses=weaknesses,
+            improvements=raw.get("improvements") or "",
+            question_feedback=question_feedback,
+            recommended_questions=raw.get("recommended_questions") or [],
+            final_advice=raw.get("final_advice") or "",
+            readiness_comment=raw.get("readiness_comment") or "",
+        )
+    except ValidationError as e:
+        logger.error("리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"리포트 응답 구성 실패: {e}")
