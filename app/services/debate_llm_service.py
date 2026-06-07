@@ -260,7 +260,7 @@ async def generate_competitor_opening(req: DebateOpeningRequest) -> DebateOpenin
             "difficulty": req.difficulty,
             "difficulty_guide": _DIFFICULTY_GUIDES["argue"][req.difficulty],
         },
-        max_tokens=768,
+        max_tokens=1024,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
@@ -289,7 +289,7 @@ async def generate_competitor_rebuttal(req: DebateRebuttalRequest) -> DebateRebu
             "difficulty": req.difficulty,
             "difficulty_guide": _DIFFICULTY_GUIDES["argue"][req.difficulty],
         },
-        max_tokens=768,
+        max_tokens=1024,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
@@ -316,7 +316,7 @@ async def generate_competitor_closing(req: DebateClosingRequest) -> DebateClosin
             "difficulty": req.difficulty,
             "difficulty_guide": _DIFFICULTY_GUIDES["closing"][req.difficulty],
         },
-        max_tokens=768,
+        max_tokens=1024,
         timeout=settings.DEBATE_GENERATION_TIMEOUT,
         model=settings.OPENAI_MODEL_DEBATE,
     )
