@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String
+from sqlalchemy import BigInteger, Column, Float, Integer, String
 from app.core.database import Base
 
 
@@ -12,4 +11,3 @@ class VoiceAnalysis(Base):
     avg_wpm = Column(Float)
     avg_silence_duration = Column(Float)
     filler_count = Column(Integer)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

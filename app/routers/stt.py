@@ -213,8 +213,8 @@ async def stt_websocket(websocket: WebSocket, session_id: str, question_id: str)
                     if stt_parts:
                         full_text = " ".join(stt_parts)
                         await db.execute(
-                            text("UPDATE interview_answers SET answer_text = :answer_text WHERE session_id = :session_id AND question_id = :question_id"),
-                            {"answer_text": full_text, "session_id": int(session_id), "question_id": int(question_id)},
+                            text("UPDATE interview_answers SET answer_text = :answer_text WHERE question_id = :question_id"),
+                            {"answer_text": full_text, "question_id": int(question_id)},
                         )
             logger.info(f"[{session_id}:{question_id}] 음성 분석 결과 및 answer_text MySQL 저장 완료")
         except Exception as e:

@@ -182,7 +182,7 @@ async def get_face_analysis_summary(session_id: str, question_id: str):
                 FaceAnalysis.session_id == session_id,
                 FaceAnalysis.question_id == question_id,
             )
-            .order_by(FaceAnalysis.created_at.desc())
+            .order_by(FaceAnalysis.id.desc())
             .limit(1)
         )
         row = result.scalars().first()
