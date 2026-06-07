@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     DEBATE_TTS_PERSONA_SPEAKERS: str = (
         "persona_01_stable:ko-KR-Neural2-B,"
         "persona_02_aggressive:ko-KR-Neural2-C,"
-        "persona_03_creative:ko-KR-Neural2-D,"
+        "persona_03_creative:ko-KR-Wavenet-C,"
         "persona_04_veteran:ko-KR-Wavenet-B,"
         "persona_05_nondev:ko-KR-Wavenet-A"
     )
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         "HR_MANAGER:ko-KR-Neural2-A,"
         "TEAM_LEAD:ko-KR-Neural2-C,"
         "EXECUTIVE:ko-KR-Wavenet-D,"
-        "TECH_INTERVIEWER:ko-KR-Neural2-D"
+        "TECH_INTERVIEWER:ko-KR-Neural2-B"
     )
     INTERVIEW_TTS_S3_PREFIX: str = "tts/interview"
 
