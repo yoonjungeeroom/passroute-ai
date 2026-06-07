@@ -120,7 +120,7 @@ def test_speaker_for_known_persona():
     from app.services.tts_service import get_speaker_for_persona
     assert get_speaker_for_persona("persona_01_stable") == "ko-KR-Neural2-B"
     assert get_speaker_for_persona("persona_02_aggressive") == "ko-KR-Neural2-C"
-    assert get_speaker_for_persona("persona_03_creative") == "ko-KR-Neural2-D"
+    assert get_speaker_for_persona("persona_03_creative") == "ko-KR-Wavenet-C"
     assert get_speaker_for_persona("persona_04_veteran") == "ko-KR-Wavenet-B"
     assert get_speaker_for_persona("persona_05_nondev") == "ko-KR-Wavenet-A"
 
@@ -135,7 +135,7 @@ def test_speaker_for_interview_persona_known():
     assert get_speaker_for_interview_persona("HR_MANAGER") == "ko-KR-Neural2-A"
     assert get_speaker_for_interview_persona("TEAM_LEAD") == "ko-KR-Neural2-C"
     assert get_speaker_for_interview_persona("EXECUTIVE") == "ko-KR-Wavenet-D"
-    assert get_speaker_for_interview_persona("TECH_INTERVIEWER") == "ko-KR-Neural2-D"
+    assert get_speaker_for_interview_persona("TECH_INTERVIEWER") == "ko-KR-Neural2-B"
 
 
 def test_speaker_for_interview_persona_none_and_unknown_fallback():
