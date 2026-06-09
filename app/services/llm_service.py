@@ -25,6 +25,9 @@ from app.schemas.evaluation import (
     ReportGenerationResponse,
     WeaknessItem,
     QuestionFeedback,
+    SelfIntroReportRequest,
+    SelfIntroReportResponse,
+    SelfIntroSummaryOutput,
 )
 
 # score-policy.md 가중치 테이블
@@ -403,3 +406,67 @@ JSON만 반환:
     except ValidationError as e:
         logger.error("리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
         raise HTTPException(status_code=500, detail=f"리포트 응답 구성 실패: {e}")
+
+
+# ── 자소서별 종합 리포트 ────────────────────────────────────────────────────────
+
+async def generate_self_intro_summary(req: SelfIntroReportRequest) -> SelfIntroReportResponse:
+    item_averages_json = json.dumps(req.item_averages, ensure_ascii=False, indent=2)
+    item_trend_json = json.dumps(
+        [t.model_dump() for t in req.item_trend], ensure_ascii=False, indent=2
+    )
+    sessions_json = json.dumps(
+        [s.model_dump() for s in req.sessions], ensure_ascii=False, indent=2
+    )
+
+    user_prompt = f"""아래는 한 자소서(=한 회사 지원)에 대한 여러 회차 연습 세션의 집계 데이터입니다.
+회차 간 추세와 반복 패턴을 종합한 자소서별 리포트를 생성해주세요.
+
+[지원 정보]
+- 직무: {req.job_title}
+- 회사: {req.company_name}
+- 총 연습 회차: {req.total_sessions}회
+- 전체 평균 점수: {req.overall_average:.0f}점 (100점 만점)
+- 준비도: {req.readiness}
+
+[항목별 평균 점수 (5점 만점)]
+{item_averages_json}
+
+[항목별 추세 (첫 회차 ↔ 마지막 회차, 5점 만점)]
+{item_trend_json}
+
+[회차별 요약 (round 오름차순, 점수는 100점 만점)]
+{sessions_json}
+
+---
+
+작성 지침:
+- 점수 척도를 절대 혼동하지 말 것: 세션/전체 점수는 100점 만점, 항목 평균(item_averages·item_trend)은 5점 만점.
+- overall: 회차별 점수 흐름으로 추세(상승/정체/하락)를 진단하고 item_trend를 참고해 종합 평가를 3~5문장으로 작성. "{req.company_name} {req.job_title}" 지원에 특화된 코멘트로 작성하고 일반론은 금지.
+- repeated_weakness: 여러 회차의 key_weaknesses에 반복 등장하는 항목을 "이 회사 면접에서 반복적으로 걸리는 약점"으로 구체적으로 진단. 반복이 뚜렷하지 않으면 가장 자주 등장한 약점을 기술.
+- next_steps: 위 약점·추세를 바탕으로 이 회사/직무 다음 연습에서 집중할 방향을 2~3문장으로 제안.
+- total_sessions가 1이면: 추세·반복을 단정하지 말 것. overall은 단일 회차 코멘트로 작성하고, repeated_weakness는 해당 회차의 주요 약점만 기술한다(반복이라는 표현 금지).
+- 입력에 없는 사실을 지어내지 말 것. 답변 원문은 제공되지 않으며 집계 데이터만 사용한다.
+- 톤: 격려하되 구체적 개선점을 담은 한국어 피드백.
+
+JSON만 반환:
+{{
+  "overall": "추세 진단 포함 종합 피드백 3~5문장",
+  "repeated_weakness": "회차 간 반복 약점 진단",
+  "next_steps": "이 회사/직무 다음 연습 방향 제안 2~3문장"
+}}"""
+
+    raw = await _call_llm_json(
+        system_prompt="당신은 채용 면접 피드백 전문가입니다. 한 자소서에 대한 여러 회차 연습 세션의 집계 데이터를 바탕으로, 회차 간 추세와 반복 패턴을 진단하는 자소서별 종합 피드백을 생성합니다. JSON 형식으로만 반환합니다.",
+        user_prompt=user_prompt,
+        max_output_tokens=1024,
+        model=settings.OPENAI_MODEL_EVALUATION,
+    )
+
+    return SelfIntroReportResponse(
+        self_intro_summary=SelfIntroSummaryOutput(
+            overall=raw.get("overall") or "",
+            repeated_weakness=raw.get("repeated_weakness") or "",
+            next_steps=raw.get("next_steps") or "",
+        )
+    )
