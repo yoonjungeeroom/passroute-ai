@@ -463,10 +463,14 @@ JSON만 반환:
         model=settings.OPENAI_MODEL_EVALUATION,
     )
 
-    return SelfIntroReportResponse(
-        self_intro_summary=SelfIntroSummaryOutput(
-            overall=raw.get("overall") or "",
-            repeated_weakness=raw.get("repeated_weakness") or "",
-            next_steps=raw.get("next_steps") or "",
+    try:
+        return SelfIntroReportResponse(
+            self_intro_summary=SelfIntroSummaryOutput(
+                overall=raw.get("overall") or "",
+                repeated_weakness=raw.get("repeated_weakness") or "",
+                next_steps=raw.get("next_steps") or "",
+            )
         )
-    )
+    except (ValidationError, AttributeError) as e:
+        logger.error("자소서 종합 리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"자소서 종합 리포트 응답 구성 실패: {e}")

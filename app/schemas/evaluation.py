@@ -257,7 +257,7 @@ class ItemTrendItem(BaseModel):
 
 
 class SessionBrief(BaseModel):
-    round: int                              # 회차 (1부터)
+    round: int = Field(ge=1)                # 회차 (1부터)
     score: float = Field(ge=0, le=100)      # 세션 점수는 100점 만점
     key_weaknesses: list[str]               # 그 회차의 핵심 약점 카테고리
 
@@ -265,13 +265,21 @@ class SessionBrief(BaseModel):
 class SelfIntroReportRequest(BaseModel):
     job_title: str
     company_name: str
-    total_sessions: int
+    total_sessions: int = Field(ge=1)
     overall_average: float = Field(ge=0, le=100)
     item_averages: dict[str, float]         # 전 회차 항목별 평균(0~5), 키는 snake_case
     item_trend: list[ItemTrendItem]         # 첫↔마지막 회차 항목 비교
     sessions: list[SessionBrief]            # 전 회차(round 오름차순)
     # 주의: InterviewReadiness(decision/reason)와 무관 — 단순 Literal 필드
     readiness: Literal["READY", "NEEDS_REVIEW", "NEEDS_IMPROVEMENT"]
+
+    @model_validator(mode="after")
+    def check_item_averages_scale(self) -> "SelfIntroReportRequest":
+        # 항목 평균은 5점 만점 — 범위를 벗어난 값이 들어오면 거부한다.
+        for k, v in self.item_averages.items():
+            if not (0.0 <= v <= 5.0):
+                raise ValueError(f"item_averages 값은 0~5 범위여야 합니다. ({k}: {v})")
+        return self
 
 
 class SelfIntroSummaryOutput(BaseModel):
