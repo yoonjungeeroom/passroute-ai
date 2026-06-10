@@ -4,6 +4,7 @@ from app.schemas.evaluation import (
     StarEvaluationRequest, StarEvaluationResponse,
     SessionSummaryRequest, SessionSummaryResponse,
     ReportGenerationRequest, ReportGenerationResponse,
+    SelfIntroReportRequest, SelfIntroReportResponse,
 )
 from app.schemas.debate import (
     DebateTurnEvalRequest, DebateTurnEvalResponse,
@@ -15,6 +16,7 @@ from app.services.llm_service import (
     evaluate_star,
     generate_session_summary,
     generate_report,
+    generate_self_intro_summary,
 )
 from app.services.debate_llm_service import (
     evaluate_debate_turn,
@@ -45,6 +47,11 @@ async def session_summary_endpoint(req: SessionSummaryRequest) -> SessionSummary
 @router.post("/report/generate", response_model=ReportGenerationResponse)
 async def report_generate_endpoint(req: ReportGenerationRequest) -> ReportGenerationResponse:
     return await generate_report(req)
+
+
+@router.post("/report/self-intro/generate", response_model=SelfIntroReportResponse)
+async def self_intro_report_generate_endpoint(req: SelfIntroReportRequest) -> SelfIntroReportResponse:
+    return await generate_self_intro_summary(req)
 
 
 # ── 토론 면접 평가 ─────────────────────────────────────────────────────────────
