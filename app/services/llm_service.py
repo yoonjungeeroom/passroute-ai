@@ -8,6 +8,8 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.schemas.evaluation import (
     EvaluationSummary,
+    FactCheck,
+    IncorrectClaim,
     LLMScores,
     LLMScoresWithWeight,
     ScoreItemWithWeight,
@@ -24,6 +26,7 @@ from app.schemas.evaluation import (
     ReportGenerationRequest,
     ReportGenerationResponse,
     WeaknessItem,
+    QuestionDetailedFeedback,
     QuestionFeedback,
     SelfIntroReportRequest,
     SelfIntroReportResponse,
@@ -51,8 +54,9 @@ logger = logging.getLogger(__name__)
 
 _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=60.0)
 
-# 리포트는 출력이 커서(최대 6000토큰) 기본 60초로는 빠듯하므로 별도 타임아웃을 둔다.
-_REPORT_TIMEOUT = 120.0
+# 리포트는 출력이 커서(문항별 구조화 피드백·fact_check 포함, 최대 9000토큰)
+# 기본 60초로는 빠듯하므로 별도 타임아웃을 둔다.
+_REPORT_TIMEOUT = 150.0
 
 def _parse_json(text: str) -> dict:
     text = text.strip()
@@ -100,6 +104,77 @@ def _merge_weights(llm_scores: LLMScores, question_type: str) -> LLMScoresWithWe
     return LLMScoresWithWeight(**data)
 
 
+# ── 신규 구조 필드 방어적 파싱 ───────────────────────────────────────────────────
+# LLM이 새 필드(detailed_feedback / fact_check)를 누락하거나 일부만 깨뜨려 보내더라도
+# 해당 필드만 None으로 떨어지고 리포트/평가 전체는 정상 생성되도록 한다.
+
+def _build_fact_check(raw) -> FactCheck | None:
+    """fact_check dict → FactCheck. 없거나 형식이 어긋나면 None."""
+    if not isinstance(raw, dict):
+        return None
+
+    # 항목 생성·타입 변환 전부를 try 안에 둔다. LLM이 비정상 타입을 보내도
+    # 예외가 helper 밖으로 새지 않고 fact_check만 None으로 격하되도록 한다.
+    try:
+        claims: list[IncorrectClaim] = []
+        for c in raw.get("incorrect_claims") or []:
+            if not isinstance(c, dict):
+                continue
+            # snake_case 우선, camelCase도 방어적으로 수용한다.
+            claims.append(IncorrectClaim(
+                user_claim=c.get("user_claim") or c.get("userClaim") or "",
+                issue=c.get("issue") or "",
+                correct_explanation=c.get("correct_explanation") or c.get("correctExplanation") or "",
+                suggested_fix=c.get("suggested_fix") or c.get("suggestedFix") or "",
+            ))
+
+        # 리스트가 아니면(문자열 등) 빈 리스트로 처리해 문자 단위 순회 버그를 막는다.
+        unsupported_raw = raw.get("unsupported_claims")
+        unsupported = (
+            [str(u) for u in unsupported_raw if u]
+            if isinstance(unsupported_raw, list)
+            else []
+        )
+
+        return FactCheck(
+            is_fact_check_applicable=bool(
+                raw.get("is_fact_check_applicable", raw.get("isFactCheckApplicable", False))
+            ),
+            incorrect_claims=claims,
+            unsupported_claims=unsupported,
+            correct_explanation=raw.get("correct_explanation") or None,
+            suggested_fix=raw.get("suggested_fix") or None,
+        )
+    except (TypeError, ValidationError) as e:
+        logger.warning("fact_check 파싱 스킵: %s | %s", e, raw)
+        return None
+
+
+def _build_detailed_feedback(raw) -> QuestionDetailedFeedback | None:
+    """detailed_feedback dict → QuestionDetailedFeedback. 없거나 형식이 어긋나면 None."""
+    if not isinstance(raw, dict):
+        return None
+    try:
+        # 리스트가 아니면(문자열 등) 빈 리스트로 처리해 문자 단위 순회 버그를 막는다.
+        missing_info_raw = raw.get("missing_info")
+        missing_info = (
+            [str(m) for m in missing_info_raw if m]
+            if isinstance(missing_info_raw, list)
+            else []
+        )
+        return QuestionDetailedFeedback(
+            strength=raw.get("strength") or "",
+            weakness=raw.get("weakness") or "",
+            missing_info=missing_info,
+            improvement_example=raw.get("improvement_example") or None,
+            suggested_answer=raw.get("suggested_answer") or None,
+            retry_strategy=raw.get("retry_strategy") or None,
+        )
+    except (TypeError, ValidationError) as e:
+        logger.warning("detailed_feedback 파싱 스킵: %s | %s", e, raw)
+        return None
+
+
 # ── 질문 단위 평가 ─────────────────────────────────────────────────────────────
 
 async def evaluate_question(req: QuestionEvaluationRequest) -> QuestionEvaluationResponse:
@@ -140,6 +215,14 @@ async def evaluate_question(req: QuestionEvaluationRequest) -> QuestionEvaluatio
 - strengths/improvements도 답변 내용을 근거로 구체적으로 작성한다.
 - improvements는 "~한 답변은 ~해서 ~이 필요해 보입니다" 형태로, 무엇을 어떻게 보완할지 명시한다.
 
+[fact_check 작성 원칙 — 기술 검증]
+- 질문이 technical이거나 답변에 검증 가능한 기술적 주장이 있으면 is_fact_check_applicable=true로 두고 아래를 채운다.
+  기술 주장이 없는 인성 답변이면 is_fact_check_applicable=false, incorrect_claims/unsupported_claims는 빈 배열로 둔다.
+- incorrect_claims: 명백히 틀린 기술 주장만 담는다. 각 항목은 사용자가 한 주장(user_claim), 무엇이 왜 틀렸는지(issue),
+  올바른 개념(correct_explanation), 고쳐 말하는 예시(suggested_fix)를 포함한다.
+- unsupported_claims: 틀렸다고 단정할 수는 없으나 근거 없이 단정한 주장(문자열). 확실하지 않으면 incorrect_claims가 아니라 여기에 둔다.
+- accuracy 점수와 모순되지 않게 작성한다(틀린 주장이 있으면 accuracy 점수도 그에 맞게 낮아야 한다).
+
 JSON만 반환:
 {{
   "llm_scores": {{
@@ -154,13 +237,20 @@ JSON만 반환:
     "authenticity":  {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
     "growth":        {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null
   }},
-  "summary": {{"strengths": "답변 근거 기반 강점 1~2문장", "improvements": "답변 근거 기반 개선 방향 1~2문장"}}
+  "summary": {{"strengths": "답변 근거 기반 강점 1~2문장", "improvements": "답변 근거 기반 개선 방향 1~2문장"}},
+  "fact_check": {{
+    "is_fact_check_applicable": true 또는 false,
+    "incorrect_claims": [
+      {{"user_claim": "사용자가 한 주장", "issue": "무엇이 왜 틀렸는지", "correct_explanation": "올바른 개념", "suggested_fix": "고쳐 말하는 예시"}}
+    ],
+    "unsupported_claims": ["근거 없이 단정한 주장"]
+  }}
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하되, 각 점수의 근거를 답변 내용에 기반해 구체적으로 제시합니다. JSON 형식으로만 반환하며 JSON 외 텍스트는 포함하지 마세요.",
+        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하되, 각 점수의 근거를 답변 내용에 기반해 구체적으로 제시합니다. 기술적 주장은 사실 여부를 검증하되 확실하지 않은 내용을 틀렸다고 단정하지 않습니다. JSON 형식으로만 반환하며 JSON 외 텍스트는 포함하지 마세요.",
         user_prompt=user_prompt,
-        max_output_tokens=3500,
+        max_output_tokens=4200,
         model=settings.OPENAI_MODEL_EVALUATION,
     )
 
@@ -186,6 +276,7 @@ JSON만 반환:
     return QuestionEvaluationResponse(
         llm_scores=_merge_weights(llm_scores, req.question_type),
         summary=summary,
+        fact_check=_build_fact_check(raw.get("fact_check")),
     )
 
 
@@ -331,13 +422,43 @@ async def generate_report(req: ReportGenerationRequest) -> ReportGenerationRespo
 
 작성 지침:
 - 각 질문 데이터의 answer(답변 원문)와 summary를 함께 근거로 사용한다. answer가 있으면 그 내용을 직접 인용/지목해 평가하고, answer가 null이면 summary 기반으로만 작성한다.
-- overall: 세션 전체 흐름 기반 2~3문장. 반복 패턴과 전반적 인상 중심으로 작성.
+
+[종합 평가 — 점수와 톤을 반드시 일치시킬 것]
+- overall/strengths/weaknesses/improvements의 톤은 실제 점수와 일치해야 한다. session_result.percentage와 각 문항 percentage를 근거로 삼는다.
+  점수가 낮은데(예: 다수 문항이 60점 미만, 또는 세션 percentage가 낮음) 종합평가만 지나치게 긍정적으로 쓰지 않는다. 반대로 점수가 높은데 과도하게 부정적으로 쓰지도 않는다.
+- overall(3~5문장)에는 다음이 모두 드러나야 한다: (1) 전체적으로 잘한 점 (2) 반복적으로 부족했던 점 (3) 가장 큰 감점 원인 (4) 다음 연습에서 우선 개선할 포인트.
 - strengths: 세션 전반에서 일관되게 잘한 점 1~2문장. 어떤 답변에서 드러났는지 구체적으로.
-- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조로 구성. comment는 어느 답변의 어떤 부분 때문에 약점인지 근거를 든다.
+- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조. comment는 어느 답변의 어떤 부분 때문에 약점인지 근거를 든다.
 - improvements: 구체적 행동 방향 1~2문장. "열심히 하세요" 같은 추상적 표현 금지.
-- question_feedback: 각 질문에 대해 점수 나열이 아니라, "이런 답변(인용)은 ~한 점이 ~해서 ~이 필요합니다" 형태로 답변의 어느 부분이 왜 그 평가를 받았고 어떻게 고치면 되는지 2~3문장으로 구체적으로 작성. star_comment는 applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
+
+[문항별 피드백 — 문항마다 반드시 다르게 작성할 것]
+- 모든 문항에 같은 문장을 재사용하지 않는다. "구체성이 부족합니다", "STAR 기법을 활용하세요" 같은 일반론을 단독으로 반복하지 말 것.
+- 질문 의도와 사용자의 실제 답변에 맞춰 관점을 달리한다. 예시:
+  · 지원동기/직무 질문 → 직무 이해도, 동기, 경험 연결성 중심
+  · 협업/갈등 질문 → 갈등 상황, 본인의 행동, 조율 과정, 결과 중심
+  · 강점/약점 질문 → 자기 인식, 약점의 구체성, 개선 노력, 실제 변화 중심
+- feedback(기존 단문): 답변 인용 + 근거 + 개선 방향 2~3문장.
+- detailed_feedback(구조화): 사용자의 실제 답변을 기준으로 작성한다.
+  · strength: 이 답변에서 실제로 잘 드러난 점 (답변 근거)
+  · weakness: 부족한 점을, "어느 부분이 왜" 부족한지 답변에 근거해 구체적으로
+  · missing_info: 답변에서 빠진 핵심 정보들 (문자열 배열). 예: 실제 충돌 의견, 본인이 제시한 기준, 확정된 결과 등
+  · improvement_example: 다음 답변에 추가하면 좋은 1~3문장 예시 (사용자 답변 맥락 반영)
+  · suggested_answer: 사용자의 답변을 더 낫게 고쳐 쓴 1~3문장 예시
+  · retry_strategy: 다음 연습 때의 답변 전략
+- [60점 미만 필수 규칙] percentage < 60인 문항은 improvement_example, suggested_answer, retry_strategy를 반드시 채운다(사용자가 다음 연습에서 바로 활용할 수 있는 1~3문장).
+  percentage가 60 이상이면 이 세 필드는 생략(null)해도 된다.
+
+[기술 사실 검증 — fact_check]
+- question_type이 technical이거나 답변에 검증 가능한 기술적 주장이 있는 문항은 fact_check를 작성한다.
+  · is_fact_check_applicable: 기술 검증이 필요한 답변이면 true. 기술 주장이 없는 인성 답변이면 false로 두고 나머지는 빈 배열.
+  · incorrect_claims: 명백히 틀린 기술 주장만. 각 항목 {{user_claim, issue, correct_explanation, suggested_fix}}.
+  · unsupported_claims: 틀렸다고 단정할 수는 없으나 근거 없이 단정한 주장(문자열 배열).
+- 확실하지 않은 내용을 틀렸다고 단정하지 말 것. 애매하면 incorrect_claims가 아니라 unsupported_claims로 분류한다.
+
+[기타]
+- star_comment는 star_evaluation.applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
 - voice_highlight 데이터는 별도 필드 출력 없이 overall/strengths/improvements에 자연스럽게 반영.
-- recommended_questions: 이번 세션의 약점과 부족한 답변을 바탕으로 다음 연습에서 풀어볼 면접 질문 3개. 직무와 약점 항목에 맞게 구체적으로 작성. 질문 텍스트만 문자열로 반환.
+- recommended_questions: 이번 세션의 약점과 부족한 답변을 바탕으로 다음 연습에서 풀어볼 면접 질문 3개. 직무와 약점 항목에 맞게 구체적으로. 질문 텍스트만 문자열로 반환.
 - final_advice: 다음 면접 연습을 위한 가장 중요한 조언 1~2문장.
 - readiness_comment: interview_readiness.decision을 수치 노출 없이 사용자 친화적으로 해석.
 
@@ -354,6 +475,21 @@ JSON만 반환:
       "question_type": "technical 또는 personality",
       "percentage": 숫자,
       "feedback": "답변 인용 + 근거 + 개선 방향 2~3문장",
+      "detailed_feedback": {{
+        "strength": "이 답변에서 잘 드러난 점",
+        "weakness": "어느 부분이 왜 부족한지",
+        "missing_info": ["빠진 정보 1", "빠진 정보 2"],
+        "improvement_example": "다음 답변에 추가하면 좋은 예시 문장 (60점 미만 필수)" 또는 null,
+        "suggested_answer": "고쳐 쓴 예시 답변 (60점 미만 필수)" 또는 null,
+        "retry_strategy": "다음 연습 답변 전략 (60점 미만 필수)" 또는 null
+      }},
+      "fact_check": {{
+        "is_fact_check_applicable": true 또는 false,
+        "incorrect_claims": [
+          {{"user_claim": "사용자가 한 주장", "issue": "무엇이 왜 틀렸는지", "correct_explanation": "올바른 개념", "suggested_fix": "고쳐 말하는 예시"}}
+        ],
+        "unsupported_claims": ["근거 없이 단정한 주장"]
+      }},
       "star_comment": "" 또는 null,
       "voice_comment": "" 또는 null
     }}
@@ -364,9 +500,15 @@ JSON만 반환:
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터와 답변 원문을 종합하여, 점수의 근거와 개선 방향을 답변 내용에 기반해 구체적으로 제시하는 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
+        system_prompt=(
+            "당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터와 답변 원문을 종합하여, "
+            "점수의 근거와 개선 방향을 답변 내용에 기반해 구체적으로 제시하는 최종 리포트를 생성합니다. "
+            "종합평가의 톤은 실제 점수와 일치시키고, 문항마다 질문 의도와 답변에 맞는 서로 다른 피드백을 작성하며, "
+            "기술적 주장은 사실 여부를 검증하되 확실하지 않은 내용을 틀렸다고 단정하지 않습니다. "
+            "JSON 형식으로만 반환합니다."
+        ),
         user_prompt=user_prompt,
-        max_output_tokens=6000,
+        max_output_tokens=9000,
         timeout=_REPORT_TIMEOUT,
         model=settings.OPENAI_MODEL_EVALUATION,
     )
@@ -386,9 +528,23 @@ JSON만 반환:
     for q in raw.get("question_feedback") or []:
         if not isinstance(q, dict):
             continue
+        # 중첩 구조(detailed_feedback / fact_check)는 먼저 방어적으로 만들어,
+        # 일부가 깨져도 해당 필드만 None으로 떨어지고 문항 자체는 살아남게 한다.
+        detailed = _build_detailed_feedback(q.get("detailed_feedback"))
+        fact_check = _build_fact_check(q.get("fact_check"))
         try:
-            question_feedback.append(QuestionFeedback(**q))
-        except (TypeError, ValidationError) as e:
+            question_feedback.append(QuestionFeedback(
+                question_index=q["question_index"],
+                question=q["question"],
+                question_type=q["question_type"],
+                percentage=q["percentage"],
+                feedback=q.get("feedback") or "",
+                star_comment=q.get("star_comment"),
+                voice_comment=q.get("voice_comment"),
+                detailed_feedback=detailed,
+                fact_check=fact_check,
+            ))
+        except (KeyError, TypeError, ValidationError) as e:
             logger.warning("리포트 question_feedback 항목 스킵: %s | %s", e, q)
 
     # 텍스트/리스트 필드가 null로 와도 기본값으로 대체한다. (get(k, default)는 값이 null이면 None을 그대로 반환)

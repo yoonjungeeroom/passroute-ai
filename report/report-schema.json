@@ -24,14 +24,36 @@
 
   "improvements": "답변 전에 구조를 먼저 설계하는 습관을 들이고, STAR 프레임워크를 경험형 질문에 적극 적용해보세요. 말하기 연습 시 필러워드 없이 천천히 말하는 훈련을 병행하면 전달력이 크게 향상될 것입니다.",
 
-  "_question_feedback_comment": "질문별 간결한 종합 피드백. 항목 점수 나열이 아닌 인사이트 중심.",
+  "_question_feedback_comment": "질문별 피드백. feedback(단문 요약)은 하위호환 유지. detailed_feedback/fact_check는 신규 nullable 필드.",
+  "_detailed_feedback_rule": "detailed_feedback.improvement_example/suggested_answer/retry_strategy는 percentage<60 문항에서 필수, 그 외에는 null 허용.",
+  "_fact_check_rule": "fact_check는 technical 또는 기술 주장 포함 답변에서만 채움. 그 외에는 is_fact_check_applicable=false 또는 필드 자체 null.",
   "question_feedback": [
     {
       "question_index": 1,
-      "question": "RESTful API 설계 원칙에 대해 설명해주세요.",
+      "question": "GET과 POST 메서드의 차이를 설명해주세요.",
       "question_type": "technical",
-      "percentage": 65,
-      "feedback": "핵심 개념은 정확하지만 나열식 구조로 인해 논리 흐름이 약했습니다. 다음에는 원칙별로 왜 중요한지 이유와 트레이드오프를 함께 설명해보세요.",
+      "percentage": 48,
+      "feedback": "GET과 POST의 용도를 반대로 설명했습니다. 메서드별 용도와 멱등성 개념을 먼저 정리한 뒤, 조회/생성 기준으로 구분해 설명해보세요.",
+      "detailed_feedback": {
+        "strength": "HTTP 메서드라는 개념 자체는 인지하고 있습니다.",
+        "weakness": "'GET은 생성, POST는 조회'라고 용도를 반대로 설명해 정확성이 크게 떨어졌습니다.",
+        "missing_info": ["각 메서드의 멱등성", "캐시 가능 여부", "요청 본문(body) 사용 여부"],
+        "improvement_example": "GET은 리소스를 조회할 때, POST는 새 리소스를 생성하거나 서버에 데이터 처리를 요청할 때 사용한다고 설명하면 좋습니다.",
+        "suggested_answer": "GET은 데이터를 조회하는 멱등한 메서드이고, POST는 리소스를 생성하거나 서버에 데이터를 전달할 때 사용하는 비멱등 메서드입니다.",
+        "retry_strategy": "메서드별 용도 → 멱등성 → 캐시 가능 여부 순으로 정리한 뒤 답변하기"
+      },
+      "fact_check": {
+        "is_fact_check_applicable": true,
+        "incorrect_claims": [
+          {
+            "user_claim": "GET은 데이터를 생성할 때, POST는 조회할 때 사용한다",
+            "issue": "HTTP 메서드의 일반적인 용도 설명이 반대로 되어 있습니다.",
+            "correct_explanation": "일반적으로 GET은 리소스 조회에, POST는 리소스 생성 또는 서버 데이터 처리 요청에 사용됩니다.",
+            "suggested_fix": "GET은 데이터를 조회할 때, POST는 새 데이터를 생성하거나 요청 데이터를 전달할 때 사용한다고 설명하는 것이 적절합니다."
+          }
+        ],
+        "unsupported_claims": []
+      },
       "star_comment": null,
       "voice_comment": "필러워드가 5회 감지되었습니다. 답변 시작 전 짧게 정리하는 습관이 도움이 됩니다."
     },
@@ -41,6 +63,19 @@
       "question_type": "personality",
       "percentage": 85,
       "feedback": "상황과 행동이 구체적으로 전달된 좋은 답변이었습니다. 결과 부분을 수치나 팀 변화 중심으로 보완하면 설득력이 더 높아집니다.",
+      "detailed_feedback": {
+        "strength": "갈등 상황과 본인이 취한 조율 행동이 구체적으로 드러났습니다.",
+        "weakness": "조율 이후의 결과와 팀에 미친 변화가 다소 추상적으로 마무리되었습니다.",
+        "missing_info": ["조율 결과 확정된 기능 범위", "팀에 미친 정량적 변화"],
+        "improvement_example": null,
+        "suggested_answer": null,
+        "retry_strategy": null
+      },
+      "fact_check": {
+        "is_fact_check_applicable": false,
+        "incorrect_claims": [],
+        "unsupported_claims": []
+      },
       "star_comment": "Situation, Task, Action은 충족되었으나 Result가 부족했습니다. 경험의 마무리를 명확히 서술해보세요.",
       "voice_comment": null
     }

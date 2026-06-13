@@ -39,6 +39,20 @@
     }
   },
 
+  "fact_check": {
+    "_comment": "FastAPI LLM이 판단. /evaluate/question 응답의 신규 nullable 필드. technical 또는 기술 주장 포함 답변에서만 채워지며, 그 외에는 is_fact_check_applicable=false 또는 필드 자체 null. accuracy 점수와 모순되지 않게 작성.",
+    "is_fact_check_applicable": true,
+    "incorrect_claims": [
+      {
+        "user_claim": "REST API는 항상 무상태(stateless)이므로 세션을 절대 쓸 수 없다",
+        "issue": "무상태 원칙은 서버가 요청 간 클라이언트 상태를 보관하지 않는다는 의미이며, '세션을 절대 쓸 수 없다'는 과도한 단정입니다.",
+        "correct_explanation": "REST의 무상태 제약은 각 요청이 필요한 정보를 모두 담아야 한다는 뜻으로, 토큰 등으로 인증 상태를 표현할 수 있습니다.",
+        "suggested_fix": "REST는 무상태를 지향하므로 서버 세션에 의존하기보다 토큰처럼 요청에 상태를 담는 방식을 선호한다고 설명하는 것이 적절합니다."
+      }
+    ],
+    "unsupported_claims": []
+  },
+
   "rule_based": {
     "_comment": "Spring에서 계산. 음성 분석 기반 감점 및 보정값.",
     "voice_analysis": {
