@@ -35,6 +35,7 @@ class GeneratedQuestion(BaseModel):
     followup_questions: list[str] = []
     intent: Optional[str] = None
     cs_topic: Optional[str] = None
+    audio_url: Optional[str] = None
 
 
 class QuestionGenerateResponse(BaseModel):

@@ -5,6 +5,7 @@ on:
     branches: [develop]
     paths:
       - "app/**"
+      - "prompts/**"
       - "requirements.txt"
       - "Dockerfile"
       - "docker-compose.yml"

@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+    # 평가·리포트는 답변 근거를 인용한 깊이 있는 분석이 필요해 더 강한 모델을 쓴다.
+    OPENAI_MODEL_EVALUATION: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     CLOVA_SECRET_KEY: str = ""
@@ -36,11 +38,20 @@ class Settings(BaseSettings):
     DEBATE_TTS_PERSONA_SPEAKERS: str = (
         "persona_01_stable:ko-KR-Neural2-B,"
         "persona_02_aggressive:ko-KR-Neural2-C,"
-        "persona_03_creative:ko-KR-Neural2-D,"
+        "persona_03_creative:ko-KR-Wavenet-C,"
         "persona_04_veteran:ko-KR-Wavenet-B,"
         "persona_05_nondev:ko-KR-Wavenet-A"
     )
     TTS_S3_PREFIX: str = "tts/debate"
+
+    # 1:1 면접 TTS (면접관 페르소나별 화자)
+    INTERVIEW_TTS_PERSONA_SPEAKERS: str = (
+        "HR_MANAGER:ko-KR-Neural2-A,"
+        "TEAM_LEAD:ko-KR-Neural2-C,"
+        "EXECUTIVE:ko-KR-Wavenet-D,"
+        "TECH_INTERVIEWER:ko-KR-Neural2-B"
+    )
+    INTERVIEW_TTS_S3_PREFIX: str = "tts/interview"
 
     # SQL 로그 출력 여부 (운영 환경에서는 False)
     SQL_ECHO: bool = False

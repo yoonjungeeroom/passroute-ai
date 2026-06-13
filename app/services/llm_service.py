@@ -1,7 +1,9 @@
 import json
+import logging
 import re
 from openai import AsyncOpenAI, OpenAIError
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.schemas.evaluation import (
@@ -23,6 +25,9 @@ from app.schemas.evaluation import (
     ReportGenerationResponse,
     WeaknessItem,
     QuestionFeedback,
+    SelfIntroReportRequest,
+    SelfIntroReportResponse,
+    SelfIntroSummaryOutput,
 )
 
 # score-policy.md 가중치 테이블
@@ -42,7 +47,12 @@ _WEIGHTS: dict[str, dict[str, float | None]] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
 _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=60.0)
+
+# 리포트는 출력이 커서(최대 6000토큰) 기본 60초로는 빠듯하므로 별도 타임아웃을 둔다.
+_REPORT_TIMEOUT = 120.0
 
 def _parse_json(text: str) -> dict:
     text = text.strip()
@@ -116,37 +126,63 @@ async def evaluate_question(req: QuestionEvaluationRequest) -> QuestionEvaluatio
 - technical 전용: accuracy, depth
 - personality 전용: authenticity, growth
 
+[feedback 작성 원칙 — 반드시 준수]
+- 각 항목 feedback은 "그 점수를 준 근거"를 답변 내용에 기반해 구체적으로 적는다.
+  추상적 표현("깊이가 부족함", "구체적이지 않음")만 쓰지 말고, 답변의 어느 부분 때문인지 밝힌다.
+- 답변에 실제로 있는 표현·키워드를 인용/지목한다. 답변에 없는 내용을 있는 것처럼 평가하지 않는다.
+- 감점 항목(3점 이하)은 "무엇이 빠졌는지 + 어떻게 고치면 되는지"를 함께 적는다.
+- 형식 예시:
+  · depth 3: "Redis로 캐싱했다"고 답했으나 왜 Memcached가 아닌 Redis인지, TTL·메모리 트레이드오프 언급이 없음. 선택의 비교 근거를 덧붙이면 좋음.
+  · specificity 2: "협업을 잘했다"는 평가만 있고 구체적 상황·역할·수치가 없음. STAR 형태로 사례 한 개를 풀어 쓰면 설득력이 올라감.
+- 답변이 비었거나 질문과 무관하면 해당 항목을 1~2점으로 주고 그 사유를 feedback에 명시한다.
+
+[summary 작성 원칙]
+- strengths/improvements도 답변 내용을 근거로 구체적으로 작성한다.
+- improvements는 "~한 답변은 ~해서 ~이 필요해 보입니다" 형태로, 무엇을 어떻게 보완할지 명시한다.
+
 JSON만 반환:
 {{
   "llm_scores": {{
-    "relevance":     {{"score": 정수, "feedback": ""}},
-    "logic":         {{"score": 정수, "feedback": ""}},
-    "specificity":   {{"score": 정수, "feedback": ""}},
-    "conciseness":   {{"score": 정수, "feedback": ""}},
-    "clarity":       {{"score": 정수, "feedback": ""}},
-    "accuracy":      {{"score": 정수, "feedback": ""}} 또는 null,
-    "depth":         {{"score": 정수, "feedback": ""}} 또는 null,
-    "job_relevance": {{"score": 정수, "feedback": ""}},
-    "authenticity":  {{"score": 정수, "feedback": ""}} 또는 null,
-    "growth":        {{"score": 정수, "feedback": ""}} 또는 null
+    "relevance":     {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "logic":         {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "specificity":   {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "conciseness":   {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "clarity":       {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "accuracy":      {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "depth":         {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "job_relevance": {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}},
+    "authenticity":  {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null,
+    "growth":        {{"score": 정수, "feedback": "점수 근거 + 답변 인용 1~2문장"}} 또는 null
   }},
-  "summary": {{"strengths": "강점 1~2문장", "improvements": "개선 방향 1~2문장"}}
+  "summary": {{"strengths": "답변 근거 기반 강점 1~2문장", "improvements": "답변 근거 기반 개선 방향 1~2문장"}}
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하고 JSON 형식으로만 반환합니다. JSON 외 텍스트는 포함하지 마세요.",
+        system_prompt="당신은 채용 면접 평가 전문가입니다. 답변을 항목별로 평가하되, 각 점수의 근거를 답변 내용에 기반해 구체적으로 제시합니다. JSON 형식으로만 반환하며 JSON 외 텍스트는 포함하지 마세요.",
         user_prompt=user_prompt,
-        max_output_tokens=2048,
+        max_output_tokens=3500,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
 
-    scores_raw = raw["llm_scores"]
-    for field in ("accuracy", "depth", "authenticity", "growth"):
-        val = scores_raw.get(field)
+    scores_raw = raw.get("llm_scores")
+    if not isinstance(scores_raw, dict):
+        scores_raw = {}
+    # 점수가 null로 온 항목은 dict가 아닌 None으로 정규화한다. (Optional/필수 공통)
+    for field, val in list(scores_raw.items()):
         if isinstance(val, dict) and val.get("score") is None:
             scores_raw[field] = None
 
-    llm_scores = LLMScores(**scores_raw)
-    summary = EvaluationSummary(**raw["summary"])
+    raw_summary = raw.get("summary")
+    if not isinstance(raw_summary, dict):
+        raw_summary = {}
+
+    try:
+        llm_scores = LLMScores(**scores_raw)
+        summary = EvaluationSummary(**raw_summary)
+    except (TypeError, KeyError, ValidationError) as e:
+        logger.error("질문 평가 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"질문 평가 응답 구성 실패: {e}")
+
     return QuestionEvaluationResponse(
         llm_scores=_merge_weights(llm_scores, req.question_type),
         summary=summary,
@@ -249,6 +285,7 @@ JSON만 반환:
         system_prompt="당신은 채용 면접 평가 전문가입니다. 세션 전체의 평가 결과를 바탕으로 종합 피드백을 생성합니다. JSON 형식으로만 반환합니다.",
         user_prompt=user_prompt,
         max_output_tokens=1024,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
 
     highlights = [QuestionHighlight(**h) for h in raw["question_highlights"]]
@@ -293,11 +330,12 @@ async def generate_report(req: ReportGenerationRequest) -> ReportGenerationRespo
 ---
 
 작성 지침:
+- 각 질문 데이터의 answer(답변 원문)와 summary를 함께 근거로 사용한다. answer가 있으면 그 내용을 직접 인용/지목해 평가하고, answer가 null이면 summary 기반으로만 작성한다.
 - overall: 세션 전체 흐름 기반 2~3문장. 반복 패턴과 전반적 인상 중심으로 작성.
-- strengths: 세션 전반에서 일관되게 잘한 점 1~2문장.
-- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조로 구성.
+- strengths: 세션 전반에서 일관되게 잘한 점 1~2문장. 어떤 답변에서 드러났는지 구체적으로.
+- weaknesses: key_weakness 항목 기준. 각 항목은 item/comment 구조로 구성. comment는 어느 답변의 어떤 부분 때문에 약점인지 근거를 든다.
 - improvements: 구체적 행동 방향 1~2문장. "열심히 하세요" 같은 추상적 표현 금지.
-- question_feedback: 각 질문에 대해 점수 나열 아닌 인사이트 중심 1~2문장. star_comment는 applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
+- question_feedback: 각 질문에 대해 점수 나열이 아니라, "이런 답변(인용)은 ~한 점이 ~해서 ~이 필요합니다" 형태로 답변의 어느 부분이 왜 그 평가를 받았고 어떻게 고치면 되는지 2~3문장으로 구체적으로 작성. star_comment는 applicable=true일 때만, voice_comment는 voice_feedback이 있을 때만 작성.
 - voice_highlight 데이터는 별도 필드 출력 없이 overall/strengths/improvements에 자연스럽게 반영.
 - recommended_questions: 이번 세션의 약점과 부족한 답변을 바탕으로 다음 연습에서 풀어볼 면접 질문 3개. 직무와 약점 항목에 맞게 구체적으로 작성. 질문 텍스트만 문자열로 반환.
 - final_advice: 다음 면접 연습을 위한 가장 중요한 조언 1~2문장.
@@ -313,9 +351,9 @@ JSON만 반환:
     {{
       "question_index": 정수,
       "question": "",
-      "question_type": "",
+      "question_type": "technical 또는 personality",
       "percentage": 숫자,
-      "feedback": "인사이트 중심 1~2문장",
+      "feedback": "답변 인용 + 근거 + 개선 방향 2~3문장",
       "star_comment": "" 또는 null,
       "voice_comment": "" 또는 null
     }}
@@ -326,18 +364,113 @@ JSON만 반환:
 }}"""
 
     raw = await _call_llm_json(
-        system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터를 종합하여 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
+        system_prompt="당신은 채용 면접 피드백 전문가입니다. 면접 평가 데이터와 답변 원문을 종합하여, 점수의 근거와 개선 방향을 답변 내용에 기반해 구체적으로 제시하는 최종 리포트를 생성합니다. JSON 형식으로만 반환합니다.",
         user_prompt=user_prompt,
-        max_output_tokens=4096,
+        max_output_tokens=6000,
+        timeout=_REPORT_TIMEOUT,
+        model=settings.OPENAI_MODEL_EVALUATION,
     )
-    
-    return ReportGenerationResponse(
-        overall=raw["overall"],
-        strengths=raw["strengths"],
-        weaknesses=[WeaknessItem(**w) for w in raw["weaknesses"]],
-        improvements=raw["improvements"],
-        question_feedback=[QuestionFeedback(**q) for q in raw["question_feedback"]],
-        recommended_questions=raw["recommended_questions"],
-        final_advice=raw["final_advice"],
-        readiness_comment=raw["readiness_comment"],
+
+    # 리스트 항목은 개별로 검증하여, 일부 항목이 어긋나도 리포트 전체가 실패하지 않도록 한다.
+    # LLM이 리스트 필드를 null로 주거나 항목이 dict가 아니어도 안전하게 건너뛴다.
+    weaknesses = []
+    for w in raw.get("weaknesses") or []:
+        if not isinstance(w, dict):
+            continue
+        try:
+            weaknesses.append(WeaknessItem(**w))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 weakness 항목 스킵: %s | %s", e, w)
+
+    question_feedback = []
+    for q in raw.get("question_feedback") or []:
+        if not isinstance(q, dict):
+            continue
+        try:
+            question_feedback.append(QuestionFeedback(**q))
+        except (TypeError, ValidationError) as e:
+            logger.warning("리포트 question_feedback 항목 스킵: %s | %s", e, q)
+
+    # 텍스트/리스트 필드가 null로 와도 기본값으로 대체한다. (get(k, default)는 값이 null이면 None을 그대로 반환)
+    try:
+        return ReportGenerationResponse(
+            overall=raw.get("overall") or "",
+            strengths=raw.get("strengths") or "",
+            weaknesses=weaknesses,
+            improvements=raw.get("improvements") or "",
+            question_feedback=question_feedback,
+            recommended_questions=raw.get("recommended_questions") or [],
+            final_advice=raw.get("final_advice") or "",
+            readiness_comment=raw.get("readiness_comment") or "",
+        )
+    except ValidationError as e:
+        logger.error("리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"리포트 응답 구성 실패: {e}")
+
+
+# ── 자소서별 종합 리포트 ────────────────────────────────────────────────────────
+
+async def generate_self_intro_summary(req: SelfIntroReportRequest) -> SelfIntroReportResponse:
+    item_averages_json = json.dumps(req.item_averages, ensure_ascii=False, indent=2)
+    item_trend_json = json.dumps(
+        [t.model_dump() for t in req.item_trend], ensure_ascii=False, indent=2
     )
+    sessions_json = json.dumps(
+        [s.model_dump() for s in req.sessions], ensure_ascii=False, indent=2
+    )
+
+    user_prompt = f"""아래는 한 자소서(=한 회사 지원)에 대한 여러 회차 연습 세션의 집계 데이터입니다.
+회차 간 추세와 반복 패턴을 종합한 자소서별 리포트를 생성해주세요.
+
+[지원 정보]
+- 직무: {req.job_title}
+- 회사: {req.company_name}
+- 총 연습 회차: {req.total_sessions}회
+- 전체 평균 점수: {req.overall_average:.0f}점 (100점 만점)
+- 준비도: {req.readiness}
+
+[항목별 평균 점수 (5점 만점)]
+{item_averages_json}
+
+[항목별 추세 (첫 회차 ↔ 마지막 회차, 5점 만점)]
+{item_trend_json}
+
+[회차별 요약 (round 오름차순, 점수는 100점 만점)]
+{sessions_json}
+
+---
+
+작성 지침:
+- 점수 척도를 절대 혼동하지 말 것: 세션/전체 점수는 100점 만점, 항목 평균(item_averages·item_trend)은 5점 만점.
+- overall: 회차별 점수 흐름으로 추세(상승/정체/하락)를 진단하고 item_trend를 참고해 종합 평가를 3~5문장으로 작성. "{req.company_name} {req.job_title}" 지원에 특화된 코멘트로 작성하고 일반론은 금지.
+- repeated_weakness: 여러 회차의 key_weaknesses에 반복 등장하는 항목을 "이 회사 면접에서 반복적으로 걸리는 약점"으로 구체적으로 진단. 반복이 뚜렷하지 않으면 가장 자주 등장한 약점을 기술.
+- next_steps: 위 약점·추세를 바탕으로 이 회사/직무 다음 연습에서 집중할 방향을 2~3문장으로 제안.
+- total_sessions가 1이면: 추세·반복을 단정하지 말 것. overall은 단일 회차 코멘트로 작성하고, repeated_weakness는 해당 회차의 주요 약점만 기술한다(반복이라는 표현 금지).
+- 입력에 없는 사실을 지어내지 말 것. 답변 원문은 제공되지 않으며 집계 데이터만 사용한다.
+- 톤: 격려하되 구체적 개선점을 담은 한국어 피드백.
+
+JSON만 반환:
+{{
+  "overall": "추세 진단 포함 종합 피드백 3~5문장",
+  "repeated_weakness": "회차 간 반복 약점 진단",
+  "next_steps": "이 회사/직무 다음 연습 방향 제안 2~3문장"
+}}"""
+
+    raw = await _call_llm_json(
+        system_prompt="당신은 채용 면접 피드백 전문가입니다. 한 자소서에 대한 여러 회차 연습 세션의 집계 데이터를 바탕으로, 회차 간 추세와 반복 패턴을 진단하는 자소서별 종합 피드백을 생성합니다. JSON 형식으로만 반환합니다.",
+        user_prompt=user_prompt,
+        max_output_tokens=1024,
+        model=settings.OPENAI_MODEL_EVALUATION,
+    )
+
+    try:
+        return SelfIntroReportResponse(
+            self_intro_summary=SelfIntroSummaryOutput(
+                overall=raw.get("overall") or "",
+                repeated_weakness=raw.get("repeated_weakness") or "",
+                next_steps=raw.get("next_steps") or "",
+            )
+        )
+    except (ValidationError, AttributeError) as e:
+        logger.error("자소서 종합 리포트 응답 구성 실패: %s | raw=%s", e, str(raw)[:500])
+        raise HTTPException(status_code=500, detail=f"자소서 종합 리포트 응답 구성 실패: {e}")
