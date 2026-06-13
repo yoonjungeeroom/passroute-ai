@@ -34,11 +34,11 @@ class Settings(BaseSettings):
     # TTS (Google Cloud Text-to-Speech)
     TTS_ENABLED: bool = False
     GOOGLE_TTS_CREDENTIALS_JSON: str = ""
-    DEBATE_TTS_INTERVIEWER_SPEAKER: str = "ko-KR-Neural2-A"
+    DEBATE_TTS_INTERVIEWER_SPEAKER: str = "ko-KR-Chirp3-HD-Aoede"
     DEBATE_TTS_PERSONA_SPEAKERS: str = (
         "persona_01_stable:ko-KR-Neural2-B,"
         "persona_02_aggressive:ko-KR-Neural2-C,"
-        "persona_03_creative:ko-KR-Wavenet-C,"
+        "persona_03_creative:ko-KR-Chirp3-HD-Sulafat,"
         "persona_04_veteran:ko-KR-Wavenet-B,"
         "persona_05_nondev:ko-KR-Wavenet-A"
     )
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # 1:1 면접 TTS (면접관 페르소나별 화자)
     INTERVIEW_TTS_PERSONA_SPEAKERS: str = (
-        "HR_MANAGER:ko-KR-Neural2-A,"
+        "HR_MANAGER:ko-KR-Chirp3-HD-Vindemiatrix,"
         "TEAM_LEAD:ko-KR-Neural2-C,"
         "EXECUTIVE:ko-KR-Wavenet-D,"
         "TECH_INTERVIEWER:ko-KR-Neural2-B"
