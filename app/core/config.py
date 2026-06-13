@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         "persona_01_stable:ko-KR-Neural2-B,"
         "persona_02_aggressive:ko-KR-Neural2-C,"
         "persona_03_creative:ko-KR-Chirp3-HD-Sulafat,"
-        "persona_04_veteran:ko-KR-Wavenet-B,"
+        "persona_04_veteran:ko-KR-Chirp3-HD-Orus,"
         "persona_05_nondev:ko-KR-Wavenet-A"
     )
     TTS_S3_PREFIX: str = "tts/debate"
