@@ -10,6 +10,29 @@ class EvaluationSummary(BaseModel):
     improvements: str
 
 
+# ── 기술 사실 검증 (fact_check) ────────────────────────────────────────────────
+# 기술 면접 답변 또는 기술적 주장이 포함된 답변에서, accuracy 점수만으로는 드러나지 않는
+# "무엇이 틀렸고 / 올바른 개념은 무엇이며 / 어떻게 고쳐 말하면 되는지"를 분리해 제공한다.
+
+class IncorrectClaim(BaseModel):
+    user_claim: str             # 사용자가 한 (틀린) 기술 주장 원문 또는 요지
+    issue: str                  # 무엇이 왜 틀렸는지
+    correct_explanation: str    # 올바른 개념 설명
+    suggested_fix: str          # 고쳐 말하는 예시 문장
+
+
+class FactCheck(BaseModel):
+    # 기술 검증이 필요한 답변인지 여부. 인성 답변 등 기술 주장이 없으면 False.
+    is_fact_check_applicable: bool = False
+    # 명백히 틀린 기술 주장만 담는다. (확실치 않으면 unsupported_claims로)
+    incorrect_claims: list[IncorrectClaim] = Field(default_factory=list)
+    # 근거 없이 단정했으나 틀렸다고 단정할 수는 없는 주장 (needsReview 성격)
+    unsupported_claims: list[str] = Field(default_factory=list)
+    # 항목이 많지 않을 때 전체 차원의 정정/예시를 담는 선택 필드. 비워도 됨.
+    correct_explanation: Optional[str] = None
+    suggested_fix: Optional[str] = None
+
+
 # ── 질문 단위 평가 (/evaluate/question) ────────────────────────────────────────
 
 class QuestionEvaluationRequest(BaseModel):
@@ -61,6 +84,8 @@ class LLMScoresWithWeight(BaseModel):
 class QuestionEvaluationResponse(BaseModel):
     llm_scores: LLMScoresWithWeight
     summary: EvaluationSummary
+    # 기술 질문/기술 주장 답변일 때만 채워진다. 그 외에는 None (하위호환).
+    fact_check: Optional[FactCheck] = None
 
 
 # ── STAR 평가 (/evaluate/star) ────────────────────────────────────────────────
@@ -224,6 +249,20 @@ class WeaknessItem(BaseModel):
     comment: str
 
 
+class QuestionDetailedFeedback(BaseModel):
+    """문항별 구조화 피드백. 점수 나열 대신 '무엇을 어떻게 고칠지'를 분리해 담는다.
+
+    improvement_example / suggested_answer / retry_strategy는 60점 미만 문항에서 필수로
+    채워지며, 그 외 문항에서는 None일 수 있다(하위호환·기본값 처리).
+    """
+    strength: str = ""                                      # 잘한 점 (답변 근거)
+    weakness: str = ""                                      # 부족한 점 (답변의 어느 부분 때문인지)
+    missing_info: list[str] = Field(default_factory=list)   # 답변에서 빠진 핵심 정보
+    improvement_example: Optional[str] = None               # 다음 답변에 추가하면 좋은 예시 문장
+    suggested_answer: Optional[str] = None                  # 사용자의 답변을 고쳐 쓴 예시
+    retry_strategy: Optional[str] = None                    # 다음 연습에서의 답변 전략
+
+
 class QuestionFeedback(BaseModel):
     question_index: int
     question: str
@@ -232,6 +271,9 @@ class QuestionFeedback(BaseModel):
     feedback: str
     star_comment: Optional[str] = None
     voice_comment: Optional[str] = None
+    # ── 신규 (nullable, 하위호환) ──────────────────────────────────────────────
+    detailed_feedback: Optional[QuestionDetailedFeedback] = None
+    fact_check: Optional[FactCheck] = None
 
 
 class ReportGenerationResponse(BaseModel):
