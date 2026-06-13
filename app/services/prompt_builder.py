@@ -7,6 +7,7 @@ from openai import APIError, APITimeoutError, AsyncOpenAI
 
 from app.core.config import settings
 from app.schemas.prompt_builder import (
+    CS_TOPICS,
     GeneratedQuestion,
     QuestionGenerateRequest,
     QuestionGenerateResponse,
@@ -192,6 +193,15 @@ def build_prompt(
         else '"followup_questions": []'
     )
 
+    if interview_type == "TECHNICAL":
+        cs_topic_options = ", ".join(CS_TOPICS)
+        cs_topic_field = (
+            f'"cs_topic": "질문과 가장 관련 있는 CS 토픽 하나를 다음 중에서 선택 '
+            f'({cs_topic_options})"'
+        )
+    else:
+        cs_topic_field = '"cs_topic": null'
+
     generation_instruction = (
         f"[생성 지시]\n"
         f"위 정보를 바탕으로 면접 질문 {question_count}개를 아래 JSON 형식으로 생성하세요.\n"
@@ -201,7 +211,8 @@ def build_prompt(
         f'    {{\n'
         f'      "question": "질문 내용",\n'
         f'      {followup_field},\n'
-        f'      "intent": "이 질문의 의도"\n'
+        f'      "intent": "이 질문의 의도",\n'
+        f'      {cs_topic_field}\n'
         f'    }}\n'
         f'  ]\n'
         f'}}'
@@ -234,6 +245,11 @@ def build_prompt(
 # ──────────────────────────────────────────────
 # OpenAI 호출 + 응답 파싱
 # ──────────────────────────────────────────────
+
+def _validate_cs_topic(value: Optional[str]) -> Optional[str]:
+    """LLM이 반환한 cs_topic이 허용된 토픽 목록에 없으면 None으로 처리한다."""
+    return value if value in CS_TOPICS else None
+
 
 async def generate_questions(
     request: QuestionGenerateRequest,
@@ -297,6 +313,7 @@ async def generate_questions(
                 question=q["question"],
                 followup_questions=q.get("followup_questions", []),
                 intent=q.get("intent"),
+                cs_topic=_validate_cs_topic(q.get("cs_topic")),
             )
             for q in parsed["questions"]
         ]

@@ -2,6 +2,20 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+CS_TOPICS: list[str] = [
+    "DATA_STRUCTURE",
+    "ALGORITHM",
+    "NETWORK",
+    "OS",
+    "DATABASE",
+    "CONCURRENCY",
+    "MEMORY_GC",
+    "LANGUAGE",
+    "FRAMEWORK",
+    "DESIGN_PATTERN",
+    "SECURITY",
+]
+
 
 class QuestionGenerateRequest(BaseModel):
     persona: Literal["HR_MANAGER", "TEAM_LEAD", "EXECUTIVE", "TECH_INTERVIEWER"]
@@ -20,6 +34,7 @@ class GeneratedQuestion(BaseModel):
     question: str
     followup_questions: list[str] = []
     intent: Optional[str] = None
+    cs_topic: Optional[str] = None
 
 
 class QuestionGenerateResponse(BaseModel):
