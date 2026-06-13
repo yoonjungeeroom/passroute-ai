@@ -113,21 +113,29 @@ def _build_fact_check(raw) -> FactCheck | None:
     if not isinstance(raw, dict):
         return None
 
-    claims: list[IncorrectClaim] = []
-    for c in raw.get("incorrect_claims") or []:
-        if not isinstance(c, dict):
-            continue
-        # snake_case 우선, camelCase도 방어적으로 수용한다.
-        claims.append(IncorrectClaim(
-            user_claim=c.get("user_claim") or c.get("userClaim") or "",
-            issue=c.get("issue") or "",
-            correct_explanation=c.get("correct_explanation") or c.get("correctExplanation") or "",
-            suggested_fix=c.get("suggested_fix") or c.get("suggestedFix") or "",
-        ))
-
-    unsupported = [str(u) for u in (raw.get("unsupported_claims") or []) if u]
-
+    # 항목 생성·타입 변환 전부를 try 안에 둔다. LLM이 비정상 타입을 보내도
+    # 예외가 helper 밖으로 새지 않고 fact_check만 None으로 격하되도록 한다.
     try:
+        claims: list[IncorrectClaim] = []
+        for c in raw.get("incorrect_claims") or []:
+            if not isinstance(c, dict):
+                continue
+            # snake_case 우선, camelCase도 방어적으로 수용한다.
+            claims.append(IncorrectClaim(
+                user_claim=c.get("user_claim") or c.get("userClaim") or "",
+                issue=c.get("issue") or "",
+                correct_explanation=c.get("correct_explanation") or c.get("correctExplanation") or "",
+                suggested_fix=c.get("suggested_fix") or c.get("suggestedFix") or "",
+            ))
+
+        # 리스트가 아니면(문자열 등) 빈 리스트로 처리해 문자 단위 순회 버그를 막는다.
+        unsupported_raw = raw.get("unsupported_claims")
+        unsupported = (
+            [str(u) for u in unsupported_raw if u]
+            if isinstance(unsupported_raw, list)
+            else []
+        )
+
         return FactCheck(
             is_fact_check_applicable=bool(
                 raw.get("is_fact_check_applicable", raw.get("isFactCheckApplicable", False))
@@ -147,10 +155,17 @@ def _build_detailed_feedback(raw) -> QuestionDetailedFeedback | None:
     if not isinstance(raw, dict):
         return None
     try:
+        # 리스트가 아니면(문자열 등) 빈 리스트로 처리해 문자 단위 순회 버그를 막는다.
+        missing_info_raw = raw.get("missing_info")
+        missing_info = (
+            [str(m) for m in missing_info_raw if m]
+            if isinstance(missing_info_raw, list)
+            else []
+        )
         return QuestionDetailedFeedback(
             strength=raw.get("strength") or "",
             weakness=raw.get("weakness") or "",
-            missing_info=[str(m) for m in (raw.get("missing_info") or []) if m],
+            missing_info=missing_info,
             improvement_example=raw.get("improvement_example") or None,
             suggested_answer=raw.get("suggested_answer") or None,
             retry_strategy=raw.get("retry_strategy") or None,

@@ -237,6 +237,45 @@ async def test_report_malformed_nested_fields_degrade_to_none():
     assert qf.fact_check.unsupported_claims == []
 
 
+def test_build_fact_check_string_list_fields_do_not_split_into_chars():
+    """unsupported_claims가 문자열로 와도 글자 단위로 쪼개지지 않고 []가 된다."""
+    from app.services.llm_service import _build_fact_check
+
+    fc = _build_fact_check({
+        "is_fact_check_applicable": True,
+        "incorrect_claims": [],
+        "unsupported_claims": "None",   # 리스트 아님 → [] 로 처리되어야 함
+    })
+    assert fc is not None
+    assert fc.unsupported_claims == []
+
+
+def test_build_fact_check_invalid_claim_degrades_to_none():
+    """claim 필드가 검증 불가 타입이면 fact_check 전체가 None으로 격하되고 예외가 새지 않는다."""
+    from app.services.llm_service import _build_fact_check
+
+    fc = _build_fact_check({
+        "is_fact_check_applicable": True,
+        # user_claim에 dict가 들어와 str 검증 실패 → helper 밖으로 예외가 나가면 안 됨
+        "incorrect_claims": [{"user_claim": {"nested": "obj"}, "issue": "x",
+                              "correct_explanation": "y", "suggested_fix": "z"}],
+    })
+    assert fc is None
+
+
+def test_build_detailed_feedback_string_missing_info_does_not_split_into_chars():
+    """missing_info가 문자열로 와도 글자 단위로 쪼개지지 않고 []가 된다."""
+    from app.services.llm_service import _build_detailed_feedback
+
+    df = _build_detailed_feedback({
+        "strength": "s",
+        "weakness": "w",
+        "missing_info": "N/A",   # 리스트 아님 → []
+    })
+    assert df is not None
+    assert df.missing_info == []
+
+
 @pytest.mark.asyncio
 async def test_evaluate_question_parses_fact_check():
     """기술 질문 평가 응답에 fact_check가 실린다."""
