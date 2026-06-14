@@ -24,40 +24,80 @@ _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 # ──────────────────────────────────────────────
 
 ANALYSIS_PROMPT = """\
-당신은 면접 답변 분석 전문가입니다.
-지원자의 답변을 분석하여 답변 품질과 핵심 키워드를 추출하세요.
+당신은 개발자 면접 답변 분석 전문가입니다.
+지원자의 최신 답변(대화 이력의 마지막 답변)을 중점 분석하되, 이전 대화 맥락도 함께 고려하세요.
 
 ## 분석 기준
-- 답변의 구체성, 깊이, 논리적 완성도를 평가
-- 답변에서 언급된 기술/경험/개념의 핵심 키워드를 추출
-- 답변에서 빠졌거나 부족한 영역을 식별
+
+### 1. 답변 품질 평가
+- 구체성: 추상적 설명인가, 실제 경험·수치·사례가 포함되었는가
+- 기술적 깊이: 표면적 언급인가, 동작 원리·내부 구조까지 이해하고 있는가
+- 논리적 완성도: 주장에 대한 근거가 있는가, 논리적 허점이 없는가
+
+### 2. 키워드 추출 (중요)
+답변에서 언급된 기술·도구·개념을 두 분류로 나누어 추출하세요:
+- **tech_keywords**: 답변에서 직접 언급한 구체적 기술/도구/프레임워크 (예: Redis, Kafka, Docker, JPA, Spring Security)
+- **concept_keywords**: 답변에서 언급한 개념/패턴/방법론 (예: 캐싱 전략, 이벤트 드리븐, CI/CD, TDD)
+
+### 3. 심화 가능 포인트 식별
+답변에서 언급했지만 깊이가 부족한 부분을 구체적으로 식별하세요:
+- 기술을 언급했지만 왜 그 기술을 선택했는지 설명하지 않은 경우
+- 결과를 말했지만 과정이나 트레이드오프를 설명하지 않은 경우
+- 개념을 아는 것처럼 말했지만 실제 적용 경험이 드러나지 않은 경우
 
 ## 응답 형식
 반드시 아래 JSON 형식으로만 응답하세요.
 {
   "quality": "sufficient" 또는 "insufficient" 또는 "partial",
-  "keywords": ["키워드1", "키워드2", ...],
+  "tech_keywords": ["Redis", "Docker", ...],
+  "concept_keywords": ["캐싱 전략", "이벤트 드리븐", ...],
+  "deep_dive_targets": [
+    {"keyword": "언급된 기술/개념", "gap": "부족한 부분 설명"}
+  ],
   "weak_points": ["부족한 부분1", "부족한 부분2", ...],
   "summary": "답변 분석 요약 (1~2문장)"
 }\
 """
 
 _BASE_SYSTEM_PROMPT = """\
-당신은 개발자 채용 면접관입니다.
-지원자의 답변과 분석 결과, 그리고 이력서 정보를 종합하여 꼬리 질문이 필요한지 판단하고, 필요하다면 꼬리 질문을 생성하세요.
+당신은 실무 경험이 풍부한 시니어 개발자 면접관입니다.
+지원자의 답변에서 언급된 구체적인 기술·개념을 포착하여, 실제 이해도와 실무 역량을 검증하는 날카로운 꼬리 질문을 생성하세요.
+
+## 꼬리 질문 전략 (핵심)
+답변에서 포착한 기술 키워드를 기반으로, 아래 전략 중 가장 적합한 것을 선택하세요:
+
+1. **동작 원리 검증**: 기술을 언급했다면, 그 기술의 내부 동작을 이해하는지 확인
+   - 예: "Redis를 캐시로 사용했다" → "Redis의 eviction 정책은 어떤 걸 사용하셨고, 그 이유는?"
+   - 예: "JPA를 사용했다" → "N+1 문제가 발생한 적 있나요? 어떻게 해결하셨나요?"
+
+2. **선택 근거 확인**: 특정 기술을 선택한 이유와 대안 비교를 확인
+   - 예: "메시지 큐로 Kafka를 도입했다" → "RabbitMQ 대신 Kafka를 선택한 이유는? 처리량 요구사항이 어느 정도였나요?"
+
+3. **장애·한계 경험 확인**: 해당 기술 사용 시 겪은 문제와 해결 과정을 확인
+   - 예: "Docker로 배포했다" → "컨테이너 환경에서 겪은 가장 까다로운 문제는? 어떻게 디버깅하셨나요?"
+
+4. **설계 의사결정 검증**: 아키텍처나 설계 선택의 트레이드오프를 확인
+   - 예: "MSA로 전환했다" → "서비스 간 통신은 동기/비동기 중 어떤 방식을 선택했고, 데이터 정합성은 어떻게 보장했나요?"
+
+5. **수치·성과 검증**: 정량적 결과를 주장했다면, 측정 방법과 기준을 확인
+   - 예: "성능을 50% 개선했다" → "그 수치는 어떤 지표로 측정한 건가요? 개선 전후 구체적 수치를 말씀해 주세요"
 
 ## 꼬리 질문을 생성해야 하는 경우
-- 답변이 모호하거나 피상적이어서 구체적인 확인이 필요한 경우
-- 기술적 깊이를 더 확인해야 하는 경우 (예: 원리, 트레이드오프, 대안)
-- 실제 경험을 검증해야 하는 경우 (예: 구체적 사례, 수치, 결과)
-- 답변에 논리적 허점이나 모순이 있는 경우
+- 답변에서 기술·도구를 언급했지만 표면적 수준에 머문 경우
+- 결과만 말하고 과정·근거·트레이드오프 설명이 빠진 경우
 - 이력서에 적힌 경험과 답변 사이에 괴리가 있는 경우
+- 답변에 논리적 허점이나 모순이 있는 경우
 
 ## 꼬리 질문을 생성하지 않아야 하는 경우
-- 답변이 이미 충분히 구체적이고 깊이가 있는 경우
+- 답변이 이미 원리·근거·경험까지 충분히 다룬 경우
 - 원래 질문이 단순 사실 확인(예/아니오)인 경우
 - 추가 질문이 면접 흐름에 도움이 되지 않는 경우
-- 답변과 무관한 방향으로 흘러갈 위험이 있는 경우
+
+## 중복 방지 지침 (필수)
+- 대화 이력에 이미 등장한 질문과 동일하거나 유사한 질문을 절대 반복하지 마세요
+- "구체적으로 설명해 주세요", "자세히 말씀해 주세요" 같은 포괄적 요청 대신, 특정 기술·상황을 지목하여 질문하세요
+- 이전 답변에서 이미 충분히 다룬 내용을 다시 묻지 마세요
+- 꼬리 질문은 반드시 최신 답변에서 새롭게 드러난 기술·경험·키워드를 타겟으로 해야 합니다
 
 ## 난이도별 판단 기준
 {difficulty_criteria}
@@ -158,6 +198,12 @@ def _build_conversation_text(request: FollowUpRequest) -> str:
         parts.append(f"{label}: {turn.question}")
         parts.append(f"답변: {turn.answer}")
 
+    if len(request.conversation) > 1:
+        asked = [turn.question for turn in request.conversation]
+        parts.append("\n[이미 질문한 내용 - 절대 반복 금지]")
+        for q in asked:
+            parts.append(f"- {q}")
+
     return "\n".join(parts)
 
 
@@ -230,7 +276,10 @@ async def search_context(state: FollowUpState) -> dict:
     request = state["request"]
     analysis = state["analysis"]
 
-    keywords = analysis.get("keywords", [])
+    keywords = (
+        analysis.get("tech_keywords", [])
+        + analysis.get("concept_keywords", [])
+    )
     if not keywords:
         return {"resume_context": "", "crawled_context": ""}
 
@@ -271,9 +320,22 @@ async def generate_question(state: FollowUpState) -> dict:
 
     enriched_parts = [user_message]
 
+    tech_kw = ", ".join(analysis.get("tech_keywords", [])) or "없음"
+    concept_kw = ", ".join(analysis.get("concept_keywords", [])) or "없음"
+
+    deep_dive_lines = []
+    for target in analysis.get("deep_dive_targets", []):
+        deep_dive_lines.append(
+            f"  - {target.get('keyword', '?')}: {target.get('gap', '?')}"
+        )
+    deep_dive_text = "\n".join(deep_dive_lines) if deep_dive_lines else "  없음"
+
     enriched_parts.append(
         f"\n[답변 분석 결과]\n"
         f"품질: {analysis.get('quality', '알 수 없음')}\n"
+        f"언급된 기술/도구: {tech_kw}\n"
+        f"언급된 개념/패턴: {concept_kw}\n"
+        f"심화 가능 포인트:\n{deep_dive_text}\n"
         f"부족한 부분: {', '.join(analysis.get('weak_points', []))}\n"
         f"요약: {analysis.get('summary', '')}"
     )
